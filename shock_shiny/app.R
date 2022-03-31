@@ -15,63 +15,71 @@ library(shinyWidgets)
 
 path_to_data <- "C:/Users/ahvoa1/data/results_final/"
 crop <- "wheat"
-load(paste0(path_to_data, "scenarios/", crop, "/", crop, "_scenario_summary.RData"))
 scenario_labs <- c("25 %", "50 %", "75 %")
 names(scenario_labs) <- c(25, 50, 75)
 
+##### UI #####
 # Define UI for application that draws 
-ui <- fluidPage(
-  
-  titlePanel("Agricultural input shocks"),
-  
-  fluidRow(
-    
-    column(2,
-      helpText("Examine shock scatterplots with different agricultural inputs."),
-      
-      
-      selectInput("crop", label = "Choose crop:",
-                  choices = c("barley", "cassava", "groundnut", "maize",
-                              "millet", "potato", "rice", "sorghum",
-                              "soybean", "sugarbeet", "sugarcane", "wheat"),
-                  selected = "barley"),
-      
-      sliderInput("bin", 
-                  label = "Choose climate bin:",
-                  min = 1, max = 25, value = 10),
-      
-      selectInput("shock", label = "Choose shock type:",
-                   choices = c("nitrogen shock", "phosphorus shock",
-                                  "potassium shock",
-                                   "machinery shock",
-                                  "pesticide shock",
-                                  "fertilizer shock", "shock in all inputs"), 
-                   selected = "nitrogen shock"),
-      
-      selectInput("agri", 
-                  label = "Choose agricultural input rate (colour):",
-                  choices = c("nitrogen fertilizer", 
-                              "phosphorus fertilizer",
-                              "potassium fertilizer", 
-                              "machinery",
-                              "pesticides"),
-                  selected = "nitrogen fertilizer"),
-      
-      checkboxInput("abline",
-                    label = "Show 1:1 line",
-                    value = FALSE)
-      
-      ),
-      
-    
-    column(10, plotOutput("agriplot"))
-    )  
-
+ui <- navbarPage("Agricultural input shocks",
+        ###### Start tab ######         
+        tabPanel("Start"
+                 
+                 ), #panel ends
+        
+        ###### Scenarios tab ######
+        tabPanel("Scenarios",
+          fluidRow(
+            
+            column(2,
+              helpText("Examine shock scatterplots with different agricultural inputs."),
+              
+              
+              selectInput("crop", label = "Choose crop:",
+                          choices = c("barley", "cassava", "groundnut", "maize",
+                                      "millet", "potato", "rice", "sorghum",
+                                      "soybean", "sugarbeet", "sugarcane", "wheat"),
+                          selected = "barley"),
+              
+              sliderInput("bin", 
+                          label = "Choose climate bin:",
+                          min = 1, max = 25, value = 10),
+              
+              selectInput("shock", label = "Choose shock type:",
+                           choices = c("nitrogen shock", "phosphorus shock",
+                                          "potassium shock",
+                                           "machinery shock",
+                                          "pesticide shock",
+                                          "fertilizer shock", "shock in all inputs"), 
+                           selected = "nitrogen shock"),
+              
+              selectInput("agri", 
+                          label = "Choose agricultural input rate (colour):",
+                          choices = c("nitrogen fertilizer", 
+                                      "phosphorus fertilizer",
+                                      "potassium fertilizer", 
+                                      "machinery",
+                                      "pesticides"),
+                          selected = "nitrogen fertilizer"),
+              
+              checkboxInput("abline",
+                            label = "Show 1:1 line",
+                            value = FALSE)
+              
+              ), #column ends
+              
+            
+            column(10, plotOutput("agriplot"))
+            ) #column ends
+        ), #panel ends
+        
+        tabPanel("next")
 )
 
+##### SERVER #####
 # Define server logic required to draw 
 server <- function(input, output) {
   
+  ###### load crop scenarios for scatterplot ######
   plot_data <- reactive({
     file_name <- paste0(path_to_data, "scenarios/", input$crop, "/", input$crop, "_scenario_summary.RData")
     get(load(file_name))
@@ -86,7 +94,7 @@ server <- function(input, output) {
     as.data.frame(crop_scenarios)
   })
   
-  
+  ###### scatterplot ######
   output$agriplot <- renderPlot({
     
     scatter_plot <- plot_data() %>%
@@ -112,5 +120,5 @@ server <- function(input, output) {
 
 }
 
-# Run the application 
+##### Run the application #####
 shinyApp(ui = ui, server = server)
