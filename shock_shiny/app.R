@@ -45,8 +45,7 @@ pal_bivariate <- c("#d3d3d3", "#b6cdcd", "#97c5c5", "#75bebe", "#52b6b6",
 get(load(paste0(path_to_data, "results_final/prod_change_bardata.RData")))
 get(load(paste0(path_to_data, "results_final/prod_change_countries.RData")))
 
-
-#prod_change_raster <- rast(paste0(path_to_data, "results_final/prod_change_raster.tif"))
+prod_change_raster <- rast(paste0(path_to_data, "results_final/prod_change_raster_norm.tif"))
 
 ##### UI #####
 # Define UI for application that draws 
@@ -508,29 +507,23 @@ server <- function(input, output) {
   })
   
   
-  # output$productionraster <- renderTmap({
-  #   
-  #   tm_shape(prod_change_raster) +
-  #     tm_raster(style = "cont" , # draw gradient instead of classified
-  #               palette = viridis(n = 5, option = "magma", direction = -1),
-  #               breaks = seq(-100, 0, 25),
-  #               legend.reverse = TRUE,
-  #               title = "decrease %",
-  #               colorNA = "white") +
-  #     tm_shape(World) +
-  #     tm_borders(col = "grey", lwd = .05)# +
-  #     # tm_layout(main.title = paste0(index_label),
-  #     #           main.title.size = 1,
-  #     #           bg.color = "white",
-  #     #           legend.show = FALSE,
-  #     #           legend.title.size = 15,
-  #     #           #legend.outside = TRUE,
-  #     #           legend.position = c("left", "bottom"),
-  #     #           earth.boundary = c(-180, 180, -90, 90),
-  #     #           earth.boundary.color = "gray",
-  #     #           frame = FALSE)
-  #   
-  # })
+  output$productionraster <- renderTmap({
+
+    tm_shape(prod_change_raster) +
+      tm_raster(style = "cont" , # draw gradient instead of classified
+                colorNA = "white",
+                palette = viridis(n = 5, option = "magma", direction = -1),
+                breaks = seq(-75, 0, 25),
+                legend.reverse = FALSE,
+                title = "decrease %"
+                ) +
+      tm_shape(World) +
+      tm_borders(col = "grey") +
+      tm_view(alpha = 1, set.view = c(30,50,2),
+              leaflet.options = ctrl_list,
+              view.legend.position = NA)
+
+  })
   
   output$productioncountries <- renderTmap({
     
@@ -538,7 +531,7 @@ server <- function(input, output) {
       tm_polygons("prod_change",
                   style="cont",
                   palette = viridis(n = 5, option = "magma", direction = -1),
-                  breaks = seq(-60, 0, 10),
+                  breaks = seq(-75, 0, 25),
                   legend.reverse = FALSE,
                   title = "decrease %")+
       tm_view(set.view = c(30,50,2))
