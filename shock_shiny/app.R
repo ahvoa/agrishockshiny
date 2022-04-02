@@ -18,7 +18,11 @@ library(terra)
 library(sf)
 library(leaflet)
 library(raster)
-
+library(scico)
+library(dplyr)
+library(tidyr)
+library(scales)
+library(wesanderson)
 
 path_to_data <- "C:/Users/ahvoa1/data/"
 crop_list <- c("barley", "cassava", "groundnut", "maize", "millet", "potato", "rice", "sorghum", "soybean", "sugarbeet", "sugarcane", "wheat")
@@ -37,6 +41,12 @@ pal_bivariate <- c("#d3d3d3", "#b6cdcd", "#97c5c5", "#75bebe", "#52b6b6",
                    "#d9ad77", "#bba874", "#9ca26f", "#799c6b", "#549567",
                    "#dd9843", "#bf9341", "#9e8e3f", "#7b893d", "#56833a",
                    "#e17e06", "#c27b06", "#a17606", "#7d7206", "#576d05")
+
+get(load(paste0(path_to_data, "results_final/prod_change_bardata.RData")))
+get(load(paste0(path_to_data, "results_final/prod_change_countries.RData")))
+
+
+#prod_change_raster <- rast(paste0(path_to_data, "results_final/prod_change_raster.tif"))
 
 ##### UI #####
 # Define UI for application that draws 
@@ -118,22 +128,65 @@ ui <- navbarPage("Agricultural input shocks",
             ) #column ends
         ), #panel ends
         
+        ###### Tiles ###### 
         tabPanel("Tiles",
           titlePanel("Tile plots"),
           fluidRow(
             
-            column(2,
+            column(3,
                    helpText("Examine scenario shocks from tileplots"),
                    
                    selectInput("tilecrop", "Select crop",
                                choices = crop_list,
-                               selected = "barley")
+                               selected = "barley"),
+                   
+                   radioButtons("tilescenario", "Select shock scenario percent",
+                                choices = c(25, 50, 75),
+                                selected = 50),
+                   
+                   radioButtons("tilecount", "Select to see either share of cells where yield decline was > 10% (share),
+                            or the mean decline in the cells where yield decline was > 10% (mean)",
+                                choices = c("share", "mean"),
+                                selected = "share"),
+                   
+                   checkboxInput("tileclimate", "Select if you would like to see
+                                 tileplots grouped in climate bins",
+                                 value = FALSE)
+                   
                    ),
             
-            column(10, plotlyOutput("tileplot"))
+            column(9, plotlyOutput("tileplot"))
                   )
 
-                 )
+                 ),
+        
+        
+        ###### Production ######
+        tabPanel("Production",
+                 titlePanel("Production plots"),
+                 fluidRow(
+                   
+                   column(3,
+                          helpText("Examine scenario shock effects on total production"),
+                   ),
+                   
+                   column(9,
+                          
+                      tabsetPanel(
+                        
+                        tabPanel("Different crops",
+                                  plotlyOutput("productionbars")),    
+                      
+                        tabPanel("All crops",
+                                  tmapOutput("productionraster")),
+                      
+                        tabPanel("All countries",
+                                  tmapOutput("productioncountries"))
+                      
+                   )
+                 
+                 )))
+        
 )
 
 ##### SERVER #####
@@ -181,11 +234,13 @@ server <- function(input, output) {
         tm_raster(style = "cont" , # draw gradient instead of classified
                   palette = pal_bivariate,
                   colorNA = "white",
-                  title = input$bincrop) +
+                  title = input$bincrop,
+                  legend.show = FALSE) +
         tm_shape(World) +
         tm_borders(col = "grey") +
-        tm_view(alpha = 1, set.view = c(0,0,1.25),
-                leaflet.options = ctrl_list)
+        tm_view(alpha = 1, set.view = c(30,50,2),
+                leaflet.options = ctrl_list,
+                view.legend.position = NA)
     
   })
   
@@ -240,168 +295,264 @@ server <- function(input, output) {
   
   output$tileplot <- renderPlotly({
     
-    count_test <- tileplot_data() %>%
-      dplyr::group_by(scenario_percent, bin) %>%
-      dplyr::summarise(across(contains("shock"), ~ sum( .x < 0.9 * observed_normal_yield)))
+    if (input$tilecount == "share") {
     
-    count_test <- tileplot_data() %>%
-      dplyr::filter(scenario_percent == 25) %>%
-      dplyr::count(bin) %>%
-      right_join(count_test, by = "bin")
-    
-    count_test <- count_test %>%
-      dplyr::mutate(across(contains("shock"), ~ (.x/n)*100))
-    
-    ### make climate tile plots for count
-    
-    climate_count <- count_test %>%
-      dplyr::filter(scenario_percent == 75)
-    
-    climate_count$ones <- rep((rep(seq(1, 5, by= 1), 5)), 1)
-    climate_count$tens <- rep((rep(seq(00, 20, by = 5), each= 5)), 1)
-    
-    climate_pivot_count <- climate_count %>%
-      dplyr::select(-scenario_percent, -n)%>%
-      pivot_longer(c(2:8), names_to = "shock", values_to = "count")
-    
-    climate_pivot_count%>%
-      mutate(across(shock, factor, levels=c("N_rate_shock","P_rate_shock","K_rate_shock",
-                                            "machinery_shock", "rescaled_pesticide_sum_shock",
-                                            "shock_fert_only", "shock_all"))) %>%
-      mutate(across(shock, plyr::mapvalues, from = c("N_rate_shock","P_rate_shock","K_rate_shock",
-                                                     "machinery_shock", "rescaled_pesticide_sum_shock",
-                                                     "shock_fert_only", "shock_all"),
-                    to = c("N-rate shock", "P-rate shock", "K-rate shock", "machinery shock",
-                           "pesticide shock", "fertilizer shock", "all inputs shock")))%>%
-      ggplot(aes(ones, tens)) +
-      geom_tile(aes(fill = count)) + 
-      geom_text(aes(label = bin), size = 2)+
-      labs(x = "precipitation", y = "temperature") +
-      #scale_fill_viridis(direction = 1, name = "% area of bin")+
-      scale_fill_scico(name = "% area of bin", palette = "batlow", direction = 1, limits = c(0, 100))+
-      ggtitle(paste0(crop_list[i], ", cells where yield decline was more than 10%")) +
-      theme(axis.text.x = element_text(angle=90))+
-      theme_classic()+
-      theme(axis.ticks = element_line(),
-            axis.line.x = element_blank(),
-            axis.line.y = element_blank(),
-            strip.background = element_blank()) +
-      scale_y_discrete(breaks=NULL)+
-      scale_x_discrete(breaks = NULL)+
-      facet_wrap(~shock)
-    
-
-    ### make normal tile plot count
-    
-    count_pivot <- count_test %>%
-      pivot_longer(cols = c(4:10), names_to = "shock" , values_to = "percent")
-    
-    
-    count_pivot %>%
-      #dplyr::filter(scenario_percent == 75)%>%
-      ggplot(aes(as.numeric(bin), shock))+
-      geom_tile(aes(fill = percent))+
-      scale_fill_scico(name = "% of bin area", palette = "batlow", direction = 1, limits = c(0, 100))+
-      scale_y_discrete("",limits = unique(count_pivot$shock), 
-                       labels = c("N shock", "P shock", "K shock", "machinery shock",
-                                  "pesticide shock", "fertilizer shock", "shock all"))+
-      scale_x_continuous("bin", breaks = seq(5,25,5))+
-      ggtitle(paste0(crop_list[i], ", cells where yield decline was more than 10%"))+
-      theme(#axis.text.x = element_text(size = 7, angle = 0),
-        axis.ticks.y = element_blank(),
-        panel.background = element_blank(),
-        panel.border = element_blank(),
-        strip.background = element_blank())+
-      facet_wrap(~scenario_percent, nrow = 1, labeller = labeller(scenario_percent = scenario_labs))
-    
-    
-    scenario_labs <- c("25 %", "50 %", "75 %")
-    names(scenario_labs) <- c(25, 50, 75)
+      count_test <- tileplot_data() %>%
+        dplyr::group_by(scenario_percent, bin) %>%
+        dplyr::summarise(across(contains("shock"), ~ sum( .x < 0.9 * observed_normal_yield)))
+      
+      count_test <- tileplot_data() %>%
+        dplyr::filter(scenario_percent == 25) %>%
+        dplyr::count(bin) %>%
+        right_join(count_test, by = "bin")
+      
+      count_test <- count_test %>%
+        dplyr::mutate(across(contains("shock"), ~ (.x/n)*100))
+      
+      if (input$tileclimate) {
+      
+        ### make climate tile plots for count
+        
+        climate_count <- count_test %>%
+          dplyr::filter(scenario_percent == input$tilescenario)
+        
+        climate_count$ones <- rep((rep(seq(1, 5, by= 1), 5)), 1)
+        climate_count$tens <- rep((rep(seq(00, 20, by = 5), each= 5)), 1)
+        
+        climate_pivot_count <- climate_count %>%
+          dplyr::select(-scenario_percent, -n)%>%
+          pivot_longer(c(2:8), names_to = "shock", values_to = "count")
+        
+        tile_plot <- climate_pivot_count%>%
+          mutate(across(shock, factor, levels=c("N_rate_shock","P_rate_shock","K_rate_shock",
+                                                "machinery_shock", "rescaled_pesticide_sum_shock",
+                                                "shock_fert_only", "shock_all"))) %>%
+          mutate(across(shock, plyr::mapvalues, from = c("N_rate_shock","P_rate_shock","K_rate_shock",
+                                                         "machinery_shock", "rescaled_pesticide_sum_shock",
+                                                         "shock_fert_only", "shock_all"),
+                        to = c("N-rate shock", "P-rate shock", "K-rate shock", "machinery shock",
+                               "pesticide shock", "fertilizer shock", "all inputs shock")))%>%
+          ggplot(aes(ones, tens)) +
+          geom_text(aes(label = bin), size = 2)+
+          geom_tile(aes(fill = count)) + 
+          xlab(paste("precipitation \u2192"))+
+          ylab(paste("temperature \u2192")) +
+          #scale_fill_viridis(direction = 1, name = "% area of bin")+
+          scale_fill_scico(name = "% area of bin", palette = "batlow", direction = 1, limits = c(0, 100))+
+          ggtitle(paste0(input$tilecrop, ", cells where yield decline was more than 10%")) +
+          theme(axis.text.x = element_text(angle=90))+
+          theme_classic()+
+          theme(axis.ticks = element_blank(),
+                axis.line.x = element_blank(),
+                axis.line.y = element_blank(),
+                axis.text = element_blank(),
+                strip.background = element_blank()) +
+          facet_wrap(~shock, nrow = 2)
+        
+        ggplotly(tile_plot)
+      
+      } else {
+  
+      ### make normal tile plot count
+      
+        count_pivot <- count_test %>%
+          pivot_longer(cols = c(4:10), names_to = "shock" , values_to = "percent")
+        
+        tile_plot <- count_pivot %>%
+          dplyr::filter(scenario_percent == input$tilescenario)%>%
+          ggplot(aes(as.numeric(bin), shock))+
+          geom_tile(aes(fill = percent))+
+          scale_fill_scico(name = "% of bin area", palette = "batlow", direction = 1, limits = c(0, 100))+
+          scale_y_discrete("",limits = unique(count_pivot$shock), 
+                           labels = c("N shock", "P shock", "K shock", "machinery shock",
+                                      "pesticide shock", "fertilizer shock", "shock all"))+
+          scale_x_continuous("bin", breaks = seq(5,25,5))+
+          ggtitle(paste0(input$tilecrop, ", cells where yield decline was more than 10%"))+
+          theme(#axis.text.x = element_text(size = 7, angle = 0),
+            axis.ticks.y = element_blank(),
+            panel.background = element_blank(),
+            panel.border = element_blank(),
+            strip.background = element_blank())#+
+          #facet_wrap(~scenario_percent, nrow = 1, labeller = labeller(scenario_percent = scenario_labs))
+      
+          ggplotly(tile_plot)
+        }  
+    } else {
     
     ### make plot from yield decrease depth
     
-    depth_test <- crop_scenarios %>%
-      dplyr::group_by(scenario_percent, bin) %>%
-      dplyr::mutate(across(contains("shock"), ~ 100*( .x - observed_normal_yield)/observed_normal_yield)) %>%
-      dplyr::select(-x, -y, -observed_normal_yield, -N_rate, -P_rate, -K_rate, -machinery, -rescaled_pesticide_sum, -irrigation_share)
-    
-    depth_test_neg <- depth_test %>%
-      dplyr::mutate(across(contains("shock"), ~ replace(.x, .x > -10, NA)))
-    
-    next_test <- depth_test_neg %>%
-      dplyr::select(-cell)%>%
-      dplyr::group_by(bin, scenario_percent) %>%
-      dplyr::summarise(across(contains("shock"), ~mean(.x, na.rm = TRUE)))
-    
-    ### make graph with climate tiles ###
-    
-    climate_depth <- next_test %>%
-      dplyr::filter(scenario_percent == 75)
-    
-    climate_depth$ones <- rep((rep(seq(1, 5, by= 1), 5)), 1)
-    climate_depth$tens <- rep((rep(seq(00, 20, by = 5), each= 5)), 1)
-    
-    climate_pivot <- climate_depth %>%
-      dplyr::select(-scenario_percent)%>%
-      pivot_longer(c(2:8), names_to = "shock", values_to = "decline")
-    
-    
-    climate_pivot %>%
-      mutate(across(shock, factor, levels=c("N_rate_shock","P_rate_shock","K_rate_shock",
-                                            "machinery_shock", "rescaled_pesticide_sum_shock",
-                                            "shock_fert_only", "shock_all"))) %>%
-      mutate(across(shock, plyr::mapvalues, from = c("N_rate_shock","P_rate_shock","K_rate_shock",
-                                                     "machinery_shock", "rescaled_pesticide_sum_shock",
-                                                     "shock_fert_only", "shock_all"),
-                    to = c("N-rate shock", "P-rate shock", "K-rate shock", "machinery shock",
-                           "pesticide shock", "fertilizer shock", "all inputs shock")))%>%
-      ggplot(aes(ones, tens)) +
-      geom_tile(aes(fill = decline)) + 
-      geom_text(aes(label = bin), size = 2)+
-      labs(x = "precipitation", y = "temperature") +
-      #scale_fill_viridis(direction = -1, name = "average yield decline")+
-      scale_fill_scico(name = "average yield decline < -10%", palette = "batlow", direction = -1, limits = c(-50, -10), oob = squish)+
-      ggtitle(paste0(crop_list[i], ", mean yield decline of bin cells where yield decline was more than 10%")) +
-      theme(axis.text.x = element_text(angle=90))+
-      theme_classic()+
-      theme(axis.line.x = element_blank(),
-            axis.line.y = element_blank(),
-            strip.background = element_blank()) +
-      scale_y_discrete(breaks=NULL)+
-      scale_x_discrete(breaks = NULL)+
-      facet_wrap(~shock)
-    
-    climate_pivot <- climate_depth %>%
-      dplyr::select(-scenario_percent)%>%
-      pivot_longer(c(2:8), names_to = "shock", values_to = "decline")
-    
-    ### make normal depth tile plot
-    
-    depth_pivot <- next_test %>%
-      pivot_longer(c(3:9), names_to = "shock", values_to = "decline")
-    
-    depth_pivot %>%
-      ggplot(aes(as.numeric(bin), shock)) +
-      geom_tile(aes(fill = decline))+
-      scale_fill_scico(name = "average yield decline < -10%", palette = "batlow", direction = -1, limits = c(-50, -10), oob = squish)+
-      #scale_fill_viridis(name = "% area of bin", option = "plasma", direction = -1, limits = c(0, 100))+
-      scale_y_discrete("",limits = unique(depth_pivot$shock), 
-                       labels = c("N shock", "P shock", "K shock", "machinery shock",
-                                  "pesticide shock", "fertilizer shock", "shock all"))+
-      scale_x_continuous("bin", breaks = seq(5,25,5))+
-      ggtitle(paste0(crop_list[i], ", Mean yield decline of bin cells where yield decline was more than 10%"))+
-      theme(#axis.text.x = element_text(size = 7, angle = 0),
-        axis.ticks.y = element_blank(),
-        panel.background = element_blank(),
-        panel.border = element_blank(),
-        strip.background = element_blank())+
-      facet_wrap(~scenario_percent, nrow = 1, labeller = labeller(scenario_percent = scenario_labs))
-    
-    
+      depth_test <- tileplot_data() %>%
+        dplyr::group_by(scenario_percent, bin) %>%
+        dplyr::mutate(across(contains("shock"), ~ 100*( .x - observed_normal_yield)/observed_normal_yield)) %>%
+        dplyr::select(-x, -y, -observed_normal_yield, -N_rate, -P_rate, -K_rate, -machinery, -rescaled_pesticide_sum, -irrigation_share)
+      
+      depth_test_neg <- depth_test %>%
+        dplyr::mutate(across(contains("shock"), ~ replace(.x, .x > -10, NA)))
+      
+      next_test <- depth_test_neg %>%
+        dplyr::select(-cell)%>%
+        dplyr::group_by(bin, scenario_percent) %>%
+        dplyr::summarise(across(contains("shock"), ~mean(.x, na.rm = TRUE)))
+      
+      ### make graph with climate tiles ###
+      
+      if (input$tileclimate) {
+      
+        climate_depth <- next_test %>%
+          dplyr::filter(scenario_percent == input$tilescenario)
+        
+        climate_depth$ones <- rep((rep(seq(1, 5, by= 1), 5)), 1)
+        climate_depth$tens <- rep((rep(seq(00, 20, by = 5), each= 5)), 1)
+        
+        climate_pivot <- climate_depth %>%
+          dplyr::select(-scenario_percent)%>%
+          pivot_longer(c(2:8), names_to = "shock", values_to = "decline")
+        
+        tile_plot <- climate_pivot %>%
+          mutate(across(shock, factor, levels=c("N_rate_shock","P_rate_shock","K_rate_shock",
+                                                "machinery_shock", "rescaled_pesticide_sum_shock",
+                                                "shock_fert_only", "shock_all"))) %>%
+          mutate(across(shock, plyr::mapvalues, from = c("N_rate_shock","P_rate_shock","K_rate_shock",
+                                                         "machinery_shock", "rescaled_pesticide_sum_shock",
+                                                         "shock_fert_only", "shock_all"),
+                        to = c("N-rate shock", "P-rate shock", "K-rate shock", "machinery shock",
+                               "pesticide shock", "fertilizer shock", "all inputs shock")))%>%
+          ggplot(aes(ones, tens)) +
+          geom_text(aes(label = bin), size = 2)+
+          geom_tile(aes(fill = decline)) + 
+          xlab(paste("precipitation \u2192"))+
+          ylab(paste("temperature \u2192")) +
+          scale_fill_scico(name = "average yield decline < -10%", palette = "batlow", direction = -1, limits = c(-50, -10), oob = squish)+
+          ggtitle(paste0(input$tilecrop, ", mean yield decline of bin cells where yield decline was more than 10%")) +
+          theme(axis.text.x = element_text(angle=90))+
+          theme_classic()+
+          theme(axis.line.x = element_blank(),
+                axis.line.y = element_blank(),
+                axis.ticks = element_blank(),
+                axis.text = element_blank(),
+                strip.background = element_blank()) +
+          facet_wrap(~shock, nrow = 2)
+        
+        ggplotly(tile_plot)
+        
+        
+      } else {
+      ### make normal depth tile plot
+      
+        depth_pivot <- next_test %>%
+          dplyr::filter(scenario_percent == input$tilescenario) %>%
+          pivot_longer(c(3:9), names_to = "shock", values_to = "decline")
+        
+        tile_plot <- depth_pivot %>%
+          ggplot(aes(as.numeric(bin), shock)) +
+          geom_tile(aes(fill = decline))+
+          scale_fill_scico(name = "average yield decline < -10%", palette = "batlow", direction = -1, limits = c(-50, -10), oob = squish)+
+          #scale_fill_viridis(name = "% area of bin", option = "plasma", direction = -1, limits = c(0, 100))+
+          scale_y_discrete("",limits = unique(depth_pivot$shock), 
+                           labels = c("N shock", "P shock", "K shock", "machinery shock",
+                                      "pesticide shock", "fertilizer shock", "shock all"))+
+          scale_x_continuous("bin", breaks = seq(5,25,5))+
+          ggtitle(paste0(input$tilecrop, ", Mean yield decline of bin cells where yield decline was more than 10%"))+
+          theme(#axis.text.x = element_text(size = 7, angle = 0),
+            axis.ticks.y = element_blank(),
+            panel.background = element_blank(),
+            panel.border = element_blank(),
+            strip.background = element_blank())#+
+          #facet_wrap(~scenario_percent, nrow = 1, labeller = labeller(scenario_percent = scenario_labs))
+      
+        ggplotly(tile_plot)
+        
+        }
+    }
     
   })
   
 
+
+  
+  ###### Production plots ######
+  
+  output$productionbars <- renderPlotly({
+    
+    production_plot <- prod_df %>%
+      mutate(across(shock, factor, levels=c("N_rate_shock","P_rate_shock","K_rate_shock",
+                                            "machinery_shock", "rescaled_pesticide_sum_shock",
+                                            "shock_fert_only", "shock_all"))) %>%
+      mutate(across(shock, plyr::mapvalues, from = c("N_rate_shock","P_rate_shock","K_rate_shock",
+                                                     "machinery_shock", "rescaled_pesticide_sum_shock",
+                                                     "shock_fert_only", "shock_all"),
+                    to = c("N-rate shock", "P-rate shock", "K-rate shock", "machinery shock",
+                           "pesticide shock", "fertilizer shock", "all inputs shock")))%>%
+      dplyr::mutate(production_decrease = ifelse(production_decrease > 0, NA, production_decrease))%>%
+      ggplot(aes(x = shock, y = production_decrease, alpha = scenario_percent, fill = shock))+ #
+      geom_bar(position= position_stack(reverse = T), stat = "identity")+
+      #coord_cartesian(ylim= c(-0.5, 35))+
+      scale_y_continuous(name = "production decrease after shock %")+
+      ggtitle("Scenario shock effects on global production")+
+      scale_alpha_discrete("scenario percent", range = c(1.0, 0.4))+
+      scale_fill_manual(values = wes_palette("GrandBudapest1", n = 7, type = "continuous"))+
+      theme_bw()+
+      theme(
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        #axis.text.x = element_text(angle = 90),
+        strip.background = element_blank(),
+        axis.title.x = element_blank(),
+        legend.position = "none"
+      )+
+      facet_wrap(~crop, nrow = 3)+
+      guides(alpha = guide_legend(order = 2), fill = guide_legend(order = 1))
+    
+    ggplotly(production_plot)
+    
+  })
+  
+  
+  # output$productionraster <- renderTmap({
+  #   
+  #   tm_shape(prod_change_raster) +
+  #     tm_raster(style = "cont" , # draw gradient instead of classified
+  #               palette = viridis(n = 5, option = "magma", direction = -1),
+  #               breaks = seq(-100, 0, 25),
+  #               legend.reverse = TRUE,
+  #               title = "decrease %",
+  #               colorNA = "white") +
+  #     tm_shape(World) +
+  #     tm_borders(col = "grey", lwd = .05)# +
+  #     # tm_layout(main.title = paste0(index_label),
+  #     #           main.title.size = 1,
+  #     #           bg.color = "white",
+  #     #           legend.show = FALSE,
+  #     #           legend.title.size = 15,
+  #     #           #legend.outside = TRUE,
+  #     #           legend.position = c("left", "bottom"),
+  #     #           earth.boundary = c(-180, 180, -90, 90),
+  #     #           earth.boundary.color = "gray",
+  #     #           frame = FALSE)
+  #   
+  # })
+  
+  output$productioncountries <- renderTmap({
+    
+    tm_shape(World_sp)+
+      tm_polygons("prod_change",
+                  style="cont",
+                  palette = viridis(n = 5, option = "magma", direction = -1),
+                  breaks = seq(-60, 0, 10),
+                  legend.reverse = FALSE,
+                  title = "decrease %")+
+      tm_view(set.view = c(30,50,2))
+      # tm_layout(main.title = "Change in production in all 12 crops after 50% shock in all inputs",
+      #           main.title.size = 1,
+      #           bg.color = "white",
+      #           legend.show = TRUE,
+      #           legend.outside = TRUE,
+      #           #legend.outside.position = c("left", "bottom"),
+      #           earth.boundary = c(-180, 180, -90, 90),
+      #           earth.boundary.color = "gray",
+      #           frame = FALSE)
+  })
+  
 }
 
 ##### Run the application #####
