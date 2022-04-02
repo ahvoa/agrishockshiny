@@ -24,6 +24,9 @@ library(tidyr)
 library(scales)
 library(wesanderson)
 
+
+##### Helper variables and functions #####
+
 path_to_data <- "C:/Users/ahvoa1/data/"
 crop_list <- c("barley", "cassava", "groundnut", "maize", "millet", "potato", "rice", "sorghum", "soybean", "sugarbeet", "sugarcane", "wheat")
 scenario_labs <- c("25 %", "50 %", "75 %")
@@ -42,14 +45,59 @@ pal_bivariate <- c("#d3d3d3", "#b6cdcd", "#97c5c5", "#75bebe", "#52b6b6",
                    "#dd9843", "#bf9341", "#9e8e3f", "#7b893d", "#56833a",
                    "#e17e06", "#c27b06", "#a17606", "#7d7206", "#576d05")
 
+scenario_pal <- viridis(n = 5, option = "magma", direction = -1)
+
 get(load(paste0(path_to_data, "results_final/prod_change_bardata.RData")))
 get(load(paste0(path_to_data, "results_final/prod_change_countries.RData")))
 
 prod_change_raster <- rast(paste0(path_to_data, "results_final/prod_change_raster_norm.tif"))
 
+make_shock_percent_raster <- function(crop_scenarios, shock_column, scenario_number) {
+  
+  #select data for raster, make columns of scenario percents
+  raster_data <- crop_scenarios %>%
+    dplyr::select(cell, shock = shock_column, observed_normal_yield, scenario_percent) %>%
+    dplyr::filter(scenario_percent == scenario_number)%>%
+    mutate(shock_value = 100 * ((shock - observed_normal_yield)/ observed_normal_yield))%>%
+    dplyr::select(cell, scenario_percent, shock_value)#%>%
+  #dplyr::filter(shock_value < 0) %>%
+  
+  #turn all positive values to zero
+  #raster_data$shock_value[raster_data$shock_value > 0] <- 0
+  
+  raster_data <- spread(raster_data, key = scenario_percent, value = shock_value)
+  
+  #get a raster file to input shock values to
+  earthstat_file <- list.files(path = "C:/Users/ahvoa1/data/EarthStat/",
+                               recursive = TRUE, pattern = paste0(crop_list[1], "_YieldPerHectare.tif"), full.names = TRUE)
+  yield_raster <- rast(earthstat_file)
+  
+  #substitute all values of the raster
+  #values(yield_raster) <- 1
+  yield_raster[] <- 1
+  
+  #create a dataframe of the raster with cell numbers and coordinates
+  yield_df <- terra::as.data.frame(yield_raster, xy = TRUE, cells = TRUE)
+  
+  #join shock data to empty raster by cell number
+  raster_data_with_all_cells <- left_join(yield_df, raster_data, by = "cell")
+  #delete cell number column and yield column
+  raster_data_with_all_cells <- raster_data_with_all_cells %>%
+    dplyr::select(-cell, -barley_YieldPerHectare)
+  
+  #create raster from dataframe, scenario percents as 
+  shock_raster <- rasterFromXYZ(raster_data_with_all_cells, res = c(0.08333333, 0.08333333), crs = "+proj=longlat +datum=WGS84", digits = 6)
+  shock_raster <- rast(shock_raster)
+  
+  return(shock_raster)
+  
+}
+
+
 ##### UI #####
 # Define UI for application that draws 
 ui <- navbarPage("Agricultural input shocks",
+        
         ###### Start tab ######         
         tabPanel("Start",
           
@@ -67,7 +115,7 @@ ui <- navbarPage("Agricultural input shocks",
                                 plotOutput("binlegend")),
                    
                     mainPanel(
-                       tmapOutput("climatebinmap"),
+                       tmapOutput("climatebinmap")
                        
                        ) #tabpanel ends
                 
@@ -78,6 +126,8 @@ ui <- navbarPage("Agricultural input shocks",
           ) #tabset ends
                  
                  ), #panel ends
+        
+        
         
         ###### Scenarios tab ######
         tabPanel("Scenarios",
@@ -127,6 +177,8 @@ ui <- navbarPage("Agricultural input shocks",
             ) #column ends
         ), #panel ends
         
+        
+        
         ###### Tiles ###### 
         tabPanel("Tiles",
           titlePanel("Tile plots"),
@@ -139,7 +191,7 @@ ui <- navbarPage("Agricultural input shocks",
                                choices = crop_list,
                                selected = "barley"),
                    
-                   radioButtons("tilescenario", "Select shock scenario percent",
+                   radioButtons("tilescenario", "Select shock severity",
                                 choices = c(25, 50, 75),
                                 selected = 50),
                    
@@ -160,13 +212,48 @@ ui <- navbarPage("Agricultural input shocks",
                  ),
         
         
+        
+        ###### Maps ######
+        
+        tabPanel("Scenario maps",
+                 fluidRow(
+                   
+                   column(3,
+                          helpText("Draw maps from different angricultural input shock scenarios"),
+                          
+                          selectInput("mapcrop", "Select crop:",
+                                      choices = crop_list,
+                                      selected = "barley"),
+                          
+                          selectInput("mapshock", "Select shock:",
+                                      choices = c("nitrogen shock", "phosphorus shock",
+                                                  "potassium shock",
+                                                  "machinery shock",
+                                                  "pesticide shock",
+                                                  "fertilizer shock", "shock in all inputs"), 
+                                      selected = "nitrogen shock"),
+                          
+                          radioButtons("mapscenario", "Select shock severity:",
+                                       choiceNames = c("25%", "50%", "75%"),
+                                       choiceValues = c(25, 50, 75),
+                                       selected = 50)
+                          ),
+                   
+                   column(9,
+                          
+                          tmapOutput("scenariomap"))
+                 )),
+        
+        
+        
+        
         ###### Production ######
         tabPanel("Production",
                  titlePanel("Production plots"),
                  fluidRow(
                    
                    column(3,
-                          helpText("Examine scenario shock effects on total production"),
+                          helpText("Examine scenario shock effects on total production")
                    ),
                    
                    column(9,
@@ -186,7 +273,10 @@ ui <- navbarPage("Agricultural input shocks",
                  
                  )))
         
+        
 )
+
+
 
 ##### SERVER #####
 # Define server logic required to draw 
@@ -466,8 +556,45 @@ server <- function(input, output) {
     
   })
   
+  ###### Maps ######
+  
+  #load data
+  scenario_map_data <- reactive({
+    file_name <- paste0(path_to_data, "results_final/scenarios/", input$mapcrop, "/", input$mapcrop, "_scenario_summary.RData")
+    get(load(file_name))
+    colnames(crop_scenarios) <- c("cell", "scenario_percent", "x", "y", "observed_normal_yield",
+                                  "nitrogen shock", "phosphorus shock",
+                                  "potassium shock", "machinery shock",
+                                  "pesticide shock", "fertilizer shock", 
+                                  "shock in all inputs", "bin", "nitrogen fertilizer", 
+                                  "phosphorus fertilizer",
+                                  "potassium fertilizer", 
+                                  "machinery", "pesticides", "irrigation")
+    as.data.frame(crop_scenarios)
+  })
 
-
+  #make raster
+  map_raster <- reactive({
+    
+    map_raster <- make_shock_percent_raster(scenario_map_data(), input$mapshock, input$mapscenario)
+  })
+  
+  #render output
+  output$scenariomap <- renderTmap({
+    
+    tm_shape(map_raster()) +
+        tm_raster(style = "cont" , # draw gradient instead of classified
+                  palette = scenario_pal,
+                  colorNA = "white",
+                  breaks = seq(-100, 0, 25),
+                  legend.reverse = FALSE
+                  ) +
+        tm_shape(World) +
+        tm_borders(col = "grey") +
+        tm_view(alpha = 1, set.view = c(30,50,2))
+    
+  })
+  
   
   ###### Production plots ######
   
@@ -509,13 +636,14 @@ server <- function(input, output) {
   
   output$productionraster <- renderTmap({
 
+    prod_change_raster <- rast(paste0(path_to_data, "results_final/prod_change_raster_norm.tif"))
+    
     tm_shape(prod_change_raster) +
       tm_raster(style = "cont" , # draw gradient instead of classified
+                palette = scenario_pal,
                 colorNA = "white",
-                palette = viridis(n = 5, option = "magma", direction = -1),
-                breaks = seq(-75, 0, 25),
+                breaks = seq(-100, 0, 25),
                 legend.reverse = FALSE,
-                title = "decrease %"
                 ) +
       tm_shape(World) +
       tm_borders(col = "grey") +
