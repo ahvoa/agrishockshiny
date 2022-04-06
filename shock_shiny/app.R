@@ -50,22 +50,20 @@ scenario_pal <- viridis(n = 5, option = "magma", direction = -1)
 get(load(paste0(path_to_data, "results_final/prod_change_bardata.RData")))
 get(load(paste0(path_to_data, "results_final/prod_change_countries.RData")))
 
-prod_change_raster <- rast(paste0(path_to_data, "results_final/prod_change_raster_norm.tif"))
+prod_change_raster <- raster(paste0(path_to_data, "results_final/prod_change_raster_norm.tif"))
 
-make_shock_percent_raster <- function(crop_scenarios, shock_column, scenario_number) {
+make_shock_raster_shiny <- function(crop_scenarios, shock_column, scenario_number) {
   
   #select data for raster, make columns of scenario percents
   raster_data <- crop_scenarios %>%
     dplyr::select(cell, shock = shock_column, observed_normal_yield, scenario_percent) %>%
     dplyr::filter(scenario_percent == scenario_number)%>%
     mutate(shock_value = 100 * ((shock - observed_normal_yield)/ observed_normal_yield))%>%
-    dplyr::select(cell, scenario_percent, shock_value)#%>%
-  #dplyr::filter(shock_value < 0) %>%
+    dplyr::select(cell, shock_value)
   
   #turn all positive values to zero
-  #raster_data$shock_value[raster_data$shock_value > 0] <- 0
-  
-  raster_data <- spread(raster_data, key = scenario_percent, value = shock_value)
+  raster_data$shock_value[raster_data$shock_value > 0] <- 0
+  raster_data$shock_value <- round(raster_data$shock_value)
   
   #get a raster file to input shock values to
   earthstat_file <- list.files(path = "C:/Users/ahvoa1/data/EarthStat/",
@@ -73,8 +71,7 @@ make_shock_percent_raster <- function(crop_scenarios, shock_column, scenario_num
   yield_raster <- rast(earthstat_file)
   
   #substitute all values of the raster
-  #values(yield_raster) <- 1
-  yield_raster[] <- 1
+  yield_raster[] <- 9999
   
   #create a dataframe of the raster with cell numbers and coordinates
   yield_df <- terra::as.data.frame(yield_raster, xy = TRUE, cells = TRUE)
@@ -85,13 +82,29 @@ make_shock_percent_raster <- function(crop_scenarios, shock_column, scenario_num
   raster_data_with_all_cells <- raster_data_with_all_cells %>%
     dplyr::select(-cell, -barley_YieldPerHectare)
   
-  #create raster from dataframe, scenario percents as 
+  #create raster
   shock_raster <- rasterFromXYZ(raster_data_with_all_cells, res = c(0.08333333, 0.08333333), crs = "+proj=longlat +datum=WGS84", digits = 6)
   shock_raster <- rast(shock_raster)
   
-  return(shock_raster)
+  #create a vector of shock values
+  shock_vec <- na.omit(c(as.matrix(shock_raster)))
+  
+  #substitute NA-values of shock raster
+  shock_raster[is.na(shock_raster)] <- 9999
+  
+  #select all result values for mask
+  shock_mask <- shock_raster <= 0
+  
+  #create a raster base for the final
+  final_raster <- rast(shock_mask)
+  
+  #substitute base raster shock mask area with result values
+  final_raster[shock_mask] <- shock_vec
+  
+  return(final_raster)
   
 }
+
 
 
 ##### UI #####
@@ -576,22 +589,28 @@ server <- function(input, output) {
   #make raster
   map_raster <- reactive({
     
-    map_raster <- make_shock_percent_raster(scenario_map_data(), input$mapshock, input$mapscenario)
+    map_raster <- make_shock_raster_shiny(scenario_map_data(), input$mapshock, input$mapscenario)
+    raster(map_raster)
+
   })
   
   #render output
-  output$scenariomap <- renderTmap({
+  output$scenariomap <- renderLeaflet({
     
-    tm_shape(map_raster()) +
-        tm_raster(style = "cont" , # draw gradient instead of classified
-                  palette = scenario_pal,
-                  colorNA = "white",
-                  breaks = seq(-100, 0, 25),
-                  legend.reverse = FALSE
-                  ) +
-        tm_shape(World) +
-        tm_borders(col = "grey") +
-        tm_view(alpha = 1, set.view = c(30,50,2))
+    leaflet() %>%
+      addTiles() %>%
+      addRasterImage(map_raster())
+    
+    # tm_shape(map_raster()) +
+    #     tm_raster(style = "cont" , # draw gradient instead of classified
+    #               palette = scenario_pal,
+    #               colorNA = "white",
+    #               breaks = seq(-100, 0, 25),
+    #               legend.reverse = FALSE
+    #               ) +
+    #     tm_shape(World) +
+    #     tm_borders(col = "grey") +
+    #     tm_view(alpha = 1, set.view = c(30,50,2))
     
   })
   
@@ -634,22 +653,27 @@ server <- function(input, output) {
   })
   
   
-  output$productionraster <- renderTmap({
+  output$productionraster <- renderLeaflet({
 
-    prod_change_raster <- rast(paste0(path_to_data, "results_final/prod_change_raster_norm.tif"))
+    prod_change_raster <- raster(paste0(path_to_data, "results_final/prod_change_raster_norm.tif"))
+    #prod_change_raster <- prod_change_raster * (-1)
     
-    tm_shape(prod_change_raster) +
-      tm_raster(style = "cont" , # draw gradient instead of classified
-                palette = scenario_pal,
-                colorNA = "white",
-                breaks = seq(-100, 0, 25),
-                legend.reverse = FALSE,
-                ) +
-      tm_shape(World) +
-      tm_borders(col = "grey") +
-      tm_view(alpha = 1, set.view = c(30,50,2),
-              leaflet.options = ctrl_list,
-              view.legend.position = NA)
+    leaflet() %>%
+      addTiles() %>%
+      addRasterImage(prod_change_raster)
+
+    # tm_shape(prod_change_raster) +
+    #   tm_raster(style = "cont" , # draw gradient instead of classified
+    #             palette = scenario_pal,
+    #             colorNA = "white",
+    #             breaks = seq(0, 100, 25),
+    #             legend.reverse = FALSE,
+    #             ) +
+    #   tm_shape(World) +
+    #   tm_borders(col = "grey") +
+    #   tm_view(alpha = 1, set.view = c(30,50,2),
+    #           leaflet.options = ctrl_list,
+    #           view.legend.position = NA)
 
   })
   
