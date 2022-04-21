@@ -23,6 +23,8 @@ library(dplyr)
 library(tidyr)
 library(scales)
 library(wesanderson)
+library(mapview)
+library(fullPage)
 
 
 ##### Helper variables and functions #####
@@ -62,7 +64,7 @@ make_shock_raster_shiny <- function(crop_scenarios, shock_column, scenario_numbe
     dplyr::select(cell, shock_value)
   
   #turn all positive values to zero
-  raster_data$shock_value[raster_data$shock_value > 0] <- 0
+  #raster_data$shock_value[raster_data$shock_value > 0] <- 0
   raster_data$shock_value <- round(raster_data$shock_value)
   
   #get a raster file to input shock values to
@@ -84,24 +86,24 @@ make_shock_raster_shiny <- function(crop_scenarios, shock_column, scenario_numbe
   
   #create raster
   shock_raster <- rasterFromXYZ(raster_data_with_all_cells, res = c(0.08333333, 0.08333333), crs = "+proj=longlat +datum=WGS84", digits = 6)
-  shock_raster <- rast(shock_raster)
+  #shock_raster <- rast(shock_raster)
   
-  #create a vector of shock values
-  shock_vec <- na.omit(c(as.matrix(shock_raster)))
+  # #create a vector of shock values
+  # shock_vec <- na.omit(c(as.matrix(shock_raster)))
+  # 
+  # #substitute NA-values of shock raster
+  # shock_raster[is.na(shock_raster)] <- 9999
+  # 
+  # #select all result values for mask
+  # shock_mask <- shock_raster <= 0
+  # 
+  # #create a raster base for the final
+  # final_raster <- rast(shock_mask)
+  # 
+  # #substitute base raster shock mask area with result values
+  # final_raster[shock_mask] <- shock_vec
   
-  #substitute NA-values of shock raster
-  shock_raster[is.na(shock_raster)] <- 9999
-  
-  #select all result values for mask
-  shock_mask <- shock_raster <= 0
-  
-  #create a raster base for the final
-  final_raster <- rast(shock_mask)
-  
-  #substitute base raster shock mask area with result values
-  final_raster[shock_mask] <- shock_vec
-  
-  return(final_raster)
+  return(shock_raster)
   
 }
 
@@ -109,126 +111,63 @@ make_shock_raster_shiny <- function(crop_scenarios, shock_column, scenario_numbe
 
 ##### UI #####
 # Define UI for application that draws 
-ui <- navbarPage("Agricultural input shocks",
+ui <- pagePiling(center = TRUE,
+                 sections.color = c("white",
+                                    "white",
+                                    "white",
+                                    "white",
+                                    "white",
+                                    "white",
+                                    "white",
+                                    "white",
+                                    "white"),
+                 menu = c(
+                   "Start" = "intro",
+                   "Climate bins" = "climate",
+                   "Agricultural inputs" = "inputs",
+                   "Random forest" = "model",
+                   "Result maps" = "maps",
+                   "Result tiles" = "tiles",
+                   "Result scatters" = "scatter",
+                   "Production" = "production",
+                   "Model performance" = "performance"),
         
         ###### Start tab ######         
-        tabPanel("Start",
-          
-            tabsetPanel(
-              tabPanel("Agricultural inputs",
-                       "more text lorem ipsum"),
-              tabPanel("Climate bins",
-                 sidebarLayout(
-                   
-                   sidebarPanel("Lorem ipsum about the premise of the study ",
-                                selectInput("bincrop", label = "Select crop",
-                                            choices = crop_list,
-                                            selected = "barley"),
-                                
-                                plotOutput("binlegend")),
-                   
-                    mainPanel(
-                       tmapOutput("climatebinmap")
+        pageSection(menu = "intro", 
+                 h2("Agricultural input shocks"),
+        ),
+
+        pageSection(menu = "climate",
+               fluidRow(
+                 
+                 column(3, "Climate bin info ",
+                              selectInput("bincrop", label = "Select crop",
+                                          choices = crop_list,
+                                          selected = "barley"),
+                              
+                              plotOutput("binlegend")),
+                 
+                  column(9,
+                     tmapOutput("climatebinmap")
                        
                        ) #tabpanel ends
                 
               ) #tabset ends
               
-            ) #mainpanel ends
+            ), #mainpanel ends
             
-          ) #tabset ends
+           #tabset ends
                  
-                 ), #panel ends
+                  #panel ends
         
+        pageSection(menu = "inputs"),
         
-        
-        ###### Scenarios tab ######
-        tabPanel("Scenarios",
-                 
-          titlePanel("Scatterplots"),
-          fluidRow(
-            
-            column(2,
-              helpText("Examine shock scatterplots with different agricultural inputs."),
-              
-              
-              selectInput("crop", label = "Choose crop:",
-                          choices = c("barley", "cassava", "groundnut", "maize",
-                                      "millet", "potato", "rice", "sorghum",
-                                      "soybean", "sugarbeet", "sugarcane", "wheat"),
-                          selected = "barley"),
-              
-              sliderInput("bin", 
-                          label = "Choose climate bin:",
-                          min = 1, max = 25, value = 10),
-              
-              selectInput("shock", label = "Choose shock type:",
-                           choices = c("nitrogen shock", "phosphorus shock",
-                                          "potassium shock",
-                                           "machinery shock",
-                                          "pesticide shock",
-                                          "fertilizer shock", "shock in all inputs"), 
-                           selected = "nitrogen shock"),
-              
-              selectInput("agri", 
-                          label = "Choose agricultural input rate (colour):",
-                          choices = c("nitrogen fertilizer", 
-                                      "phosphorus fertilizer",
-                                      "potassium fertilizer", 
-                                      "machinery",
-                                      "pesticides"),
-                          selected = "nitrogen fertilizer"),
-              
-              checkboxInput("abline",
-                            label = "Show 1:1 line",
-                            value = FALSE)
-              
-              ), #column ends
-              
-            
-            column(10, plotOutput("agriplot"))
-            ) #column ends
-        ), #panel ends
-        
-        
-        
-        ###### Tiles ###### 
-        tabPanel("Tiles",
-          titlePanel("Tile plots"),
-          fluidRow(
-            
-            column(3,
-                   helpText("Examine scenario shocks from tileplots"),
-                   
-                   selectInput("tilecrop", "Select crop",
-                               choices = crop_list,
-                               selected = "barley"),
-                   
-                   radioButtons("tilescenario", "Select shock severity",
-                                choices = c(25, 50, 75),
-                                selected = 50),
-                   
-                   radioButtons("tilecount", "Select to see either share of cells where yield decline was > 10% (share),
-                            or the mean decline in the cells where yield decline was > 10% (mean)",
-                                choices = c("share", "mean"),
-                                selected = "share"),
-                   
-                   checkboxInput("tileclimate", "Select if you would like to see
-                                 tileplots grouped in climate bins",
-                                 value = FALSE)
-                   
-                   ),
-            
-            column(9, plotlyOutput("tileplot"))
-                  )
-
-                 ),
-        
+        pageSection(menu = "model"),
         
         
         ###### Maps ######
         
-        tabPanel("Scenario maps",
+        pageSection(menu = "maps",
                  fluidRow(
                    
                    column(3,
@@ -254,15 +193,92 @@ ui <- navbarPage("Agricultural input shocks",
                    
                    column(9,
                           
-                          tmapOutput("scenariomap"))
+                          leafletOutput("scenariomap"))
                  )),
         
+        ###### Tiles ###### 
+        pageSection(menu = "tiles",
+                    fluidRow(
+                      
+                      column(3,
+                             helpText("Examine scenario shocks from tileplots"),
+                             
+                             selectInput("tilecrop", "Select crop",
+                                         choices = crop_list,
+                                         selected = "barley"),
+                             
+                             radioButtons("tilescenario", "Select shock severity",
+                                          choices = c(25, 50, 75),
+                                          selected = 50),
+                             
+                             radioButtons("tilecount", "Select to see either share of cells where yield decline was > 10% (share),
+                            or the mean decline in the cells where yield decline was > 10% (mean)",
+                                          choices = c("share", "mean"),
+                                          selected = "share"),
+                             
+                             checkboxInput("tileclimate", "Select if you would like to see
+                                 tileplots grouped in climate bins",
+                                           value = FALSE)
+                             
+                      ),
+                      
+                      column(9, plotlyOutput("tileplot"))
+                    )
+                    
+        ),
+        
+        
+        ###### Scenarios tab ######
+        pageSection(menu = "scatter",
+                    
+                fluidRow(
+                      
+                      column(3,
+                             helpText("Examine shock scatterplots with different agricultural inputs."),
+                             
+                             
+                             selectInput("crop", label = "Choose crop:",
+                                         choices = c("barley", "cassava", "groundnut", "maize",
+                                                     "millet", "potato", "rice", "sorghum",
+                                                     "soybean", "sugarbeet", "sugarcane", "wheat"),
+                                         selected = "barley"),
+                             
+                             sliderInput("bin", 
+                                         label = "Choose climate bin:",
+                                         min = 1, max = 25, value = 10),
+                             
+                             selectInput("shock", label = "Choose shock type:",
+                                         choices = c("nitrogen shock", "phosphorus shock",
+                                                     "potassium shock",
+                                                     "machinery shock",
+                                                     "pesticide shock",
+                                                     "fertilizer shock", "shock in all inputs"), 
+                                         selected = "nitrogen shock"),
+                             
+                             selectInput("agri", 
+                                         label = "Choose agricultural input rate (colour):",
+                                         choices = c("nitrogen fertilizer", 
+                                                     "phosphorus fertilizer",
+                                                     "potassium fertilizer", 
+                                                     "machinery",
+                                                     "pesticides"),
+                                         selected = "nitrogen fertilizer"),
+                             
+                             checkboxInput("abline",
+                                           label = "Show 1:1 line",
+                                           value = FALSE)
+                             
+                      ), #column ends
+                      
+                      
+                      column(9, plotOutput("agriplot"))
+                    ) #column ends
+        ), #panel ends
         
         
         
         ###### Production ######
-        tabPanel("Production",
-                 titlePanel("Production plots"),
+        pageSection(menu = "production",
                  fluidRow(
                    
                    column(3,
@@ -284,7 +300,11 @@ ui <- navbarPage("Agricultural input shocks",
                       
                    )
                  
-                 )))
+                 ))),
+        
+        pageSection(menu = "performance",
+                 
+                 )
         
         
 )
@@ -343,9 +363,9 @@ server <- function(input, output) {
         tm_view(alpha = 1, set.view = c(30,50,2),
                 leaflet.options = ctrl_list,
                 view.legend.position = NA)
-    
+
   })
-  
+
   
   
   ###### load crop scenarios for scatterplot ######
@@ -590,29 +610,45 @@ server <- function(input, output) {
   map_raster <- reactive({
     
     map_raster <- make_shock_raster_shiny(scenario_map_data(), input$mapshock, input$mapscenario)
-    raster(map_raster)
+    
 
   })
   
+  pal_map <- colorNumeric("magma", domain = c(-100, 0), reverse = FALSE, na.color = NA)
+  
+  
   #render output
-  output$scenariomap <- renderLeaflet({
+  output$scenariomap <- 
     
-    leaflet() %>%
-      addTiles() %>%
-      addRasterImage(map_raster())
+    renderLeaflet({
+
+      leaflet() %>%
+        addTiles() %>%
+        addRasterImage(map_raster(), colors = pal_map, maxBytes = 1000000000) %>%
+        addLegend(pal = pal_map, values = c(-100, 0), title = "yield decrease %") %>%
+        setView(lng=30, lat=50, zoom =2)
     
-    # tm_shape(map_raster()) +
+      #tmap method (does not work)
+    #renderTmap({
+  # 
+    # map <- tm_shape(map_raster()) +
     #     tm_raster(style = "cont" , # draw gradient instead of classified
     #               palette = scenario_pal,
     #               colorNA = "white",
     #               breaks = seq(-100, 0, 25),
     #               legend.reverse = FALSE
     #               ) +
-    #     tm_shape(World) +
-    #     tm_borders(col = "grey") +
+    #     # tm_shape(World) +
+    #     # tm_borders(col = "grey") +
     #     tm_view(alpha = 1, set.view = c(30,50,2))
-    
-  })
+    # 
+    # tmap_leaflet(map)
+      
+      # map <- mapview(map_raster(), maxpixels = 9331200)
+      # 
+      # map@map
+
+   })
   
   
   ###### Production plots ######
@@ -655,12 +691,16 @@ server <- function(input, output) {
   
   output$productionraster <- renderLeaflet({
 
-    prod_change_raster <- raster(paste0(path_to_data, "results_final/prod_change_raster_norm.tif"))
+    prod_change_raster <- raster(paste0(path_to_data, "results_final/prod_change_raster.tif"))
     #prod_change_raster <- prod_change_raster * (-1)
     
-    leaflet() %>%
-      addTiles() %>%
-      addRasterImage(prod_change_raster)
+    map <- mapview(prod_change_raster, maxpixels =  9331200)
+    
+    map@map
+    
+    # leaflet() %>%
+    #   addTiles() %>%
+    #   addRasterImage(prod_change_raster)
 
     # tm_shape(prod_change_raster) +
     #   tm_raster(style = "cont" , # draw gradient instead of classified
