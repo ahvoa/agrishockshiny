@@ -112,7 +112,7 @@ make_shock_raster_shiny <- function(crop_scenarios, shock_column, scenario_numbe
 ##### UI #####
 # Define UI for application that draws 
 ui <- pagePiling(center = TRUE,
-                 sections.color = c("white",
+                 sections.color = c("#F1BB7B",
                                     "white",
                                     "white",
                                     "white",
@@ -126,9 +126,9 @@ ui <- pagePiling(center = TRUE,
                    "Climate bins" = "climate",
                    "Agricultural inputs" = "inputs",
                    "Random forest" = "model",
-                   "Result maps" = "maps",
-                   "Result tiles" = "tiles",
-                   "Result scatters" = "scatter",
+                   "Scenario maps" = "maps",
+                   "Tileplots" = "tiles",
+                   "Scatterplots" = "scatter",
                    "Production" = "production",
                    "Model performance" = "performance"),
         
@@ -140,25 +140,25 @@ ui <- pagePiling(center = TRUE,
         pageSection(menu = "climate",
                fluidRow(
                  
-                 column(3, "Climate bin info ",
+                 column(3,
+                        column(1),
+                        column(11, "Climate bin info ",
                               selectInput("bincrop", label = "Select crop",
                                           choices = crop_list,
                                           selected = "barley"),
                               
-                              plotOutput("binlegend")),
+                              plotOutput("binlegend"))),
                  
                   column(9,
-                     tmapOutput("climatebinmap")
+                         column(11, tmapOutput("climatebinmap")),
+                         column(1))
                        
-                       ) #tabpanel ends
+                        #tabpanel ends
                 
               ) #tabset ends
               
             ), #mainpanel ends
             
-           #tabset ends
-                 
-                  #panel ends
         
         pageSection(menu = "inputs"),
         
@@ -171,6 +171,8 @@ ui <- pagePiling(center = TRUE,
                  fluidRow(
                    
                    column(3,
+                        column(1),
+                        column(11,
                           helpText("Draw maps from different angricultural input shock scenarios"),
                           
                           selectInput("mapcrop", "Select crop:",
@@ -189,11 +191,12 @@ ui <- pagePiling(center = TRUE,
                                        choiceNames = c("25%", "50%", "75%"),
                                        choiceValues = c(25, 50, 75),
                                        selected = 50)
-                          ),
+                          )),
                    
                    column(9,
-                          
-                          leafletOutput("scenariomap"))
+                        column(10,
+                          leafletOutput("scenariomap")),
+                        column(2))
                  )),
         
         ###### Tiles ###### 
@@ -201,6 +204,8 @@ ui <- pagePiling(center = TRUE,
                     fluidRow(
                       
                       column(3,
+                          column(1),
+                          column(11,
                              helpText("Examine scenario shocks from tileplots"),
                              
                              selectInput("tilecrop", "Select crop",
@@ -220,20 +225,24 @@ ui <- pagePiling(center = TRUE,
                                  tileplots grouped in climate bins",
                                            value = FALSE)
                              
-                      ),
+                      )),
                       
-                      column(9, plotlyOutput("tileplot"))
+                      column(9,
+                             column(11, plotlyOutput("tileplot")),
+                             column(1))
                     )
                     
         ),
         
         
-        ###### Scenarios tab ######
+        ###### Scatter tab ######
         pageSection(menu = "scatter",
                     
                 fluidRow(
                       
                       column(3,
+                        column(1),
+                        column(11,
                              helpText("Examine shock scatterplots with different agricultural inputs."),
                              
                              
@@ -268,12 +277,12 @@ ui <- pagePiling(center = TRUE,
                                            label = "Show 1:1 line",
                                            value = FALSE)
                              
-                      ), #column ends
+                      )), #column ends
                       
                       
                       column(9, plotOutput("agriplot"))
                     ) #column ends
-        ), #panel ends
+        ), #page ends
         
         
         
@@ -281,11 +290,9 @@ ui <- pagePiling(center = TRUE,
         pageSection(menu = "production",
                  fluidRow(
                    
-                   column(3,
-                          helpText("Examine scenario shock effects on total production")
-                   ),
-                   
-                   column(9,
+                   column(12,
+                    column(1),
+                    column(10,
                           
                       tabsetPanel(
                         
@@ -298,11 +305,34 @@ ui <- pagePiling(center = TRUE,
                         tabPanel("All countries",
                                   tmapOutput("productioncountries"))
                       
-                   )
+                   )),
+                   column(1)
                  
                  ))),
         
         pageSection(menu = "performance",
+                    
+              tabsetPanel(
+                tabPanel("NSE-scores",
+                         plotlyOutput("NSE")),
+                tabPanel("RMSE-scores",
+                         selectInput("RMSE", label = "Select crop",
+                                     choices = crop_list,
+                                     selected = "barley")
+                         ),
+                tabPanel("ALE-plots",
+                    fluidRow(
+                      
+                         
+                         selectInput("NSE", label = "Select crop",
+                                     choices = crop_list,
+                                     selected = "barley"),
+                         sliderInput("RMSEbin", label = "Select climate bin",
+                                     min = 1, max = 25, value = 10)
+                         ),
+                    
+                
+              )
                  
                  )
         
