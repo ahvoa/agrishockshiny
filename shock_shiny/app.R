@@ -29,7 +29,6 @@ library(fullPage)
 
 ##### Helper variables and functions #####
 
-path_to_data <- "C:/Users/ahvoa1/data/"
 crop_list <- c("barley", "cassava", "groundnut", "maize", "millet", "potato", "rice", "sorghum", "soybean", "sugarbeet", "sugarcane", "wheat")
 scenario_labs <- c("25 %", "50 %", "75 %")
 data("World")
@@ -52,7 +51,7 @@ scenario_pal <- viridis(n = 5, option = "magma", direction = -1)
 get(load(paste0(path_to_data, "results_final/prod_change_bardata.RData")))
 get(load(paste0(path_to_data, "results_final/prod_change_countries.RData")))
 
-prod_change_raster <- raster(paste0(path_to_data, "results_final/prod_change_raster_norm.tif"))
+#prod_change_raster <- raster(paste0(path_to_data, "results_final/prod_change_raster_norm.tif"))
 
 make_shock_raster_shiny <- function(crop_scenarios, shock_column, scenario_number) {
   
@@ -337,7 +336,7 @@ ui <- pagePiling(center = TRUE,
                  )
         
         
-)
+))
 
 
 
@@ -376,7 +375,7 @@ server <- function(input, output) {
   })
   
   bin_data <- reactive({
-    raster_name <- paste0(path_to_data, 'fertandbins/new_bins/5x5/', input$bincrop, "_binmatrix.tif")
+    raster_name <- paste0('data/', input$bincrop, "_binmatrix.tif")
     climate_bins <- rast(raster_name)
   })
   
@@ -400,7 +399,7 @@ server <- function(input, output) {
   
   ###### load crop scenarios for scatterplot ######
   plot_data <- reactive({
-    file_name <- paste0(path_to_data, "results_final/scenarios/", input$crop, "/", input$crop, "_scenario_summary.RData")
+    file_name <- paste0( "data/", input$crop, "_scenario_summary.RData")
     get(load(file_name))
     colnames(crop_scenarios) <- c("cell", "scenario_percent", "x", "y", "observed_normal_yield",
                                "nitrogen shock", "phosphorus shock",
@@ -440,7 +439,7 @@ server <- function(input, output) {
   ###### Tile plots ######
   
   tileplot_data <- reactive({
-    file_name <- paste0(path_to_data, "results_final/scenarios/", input$tilecrop, "/", input$tilecrop, "_scenario_summary.RData")
+    file_name <- paste0("data/", input$crop, "_scenario_summary.RData")
     get(load(file_name))
     
   })
@@ -623,7 +622,7 @@ server <- function(input, output) {
   
   #load data
   scenario_map_data <- reactive({
-    file_name <- paste0(path_to_data, "results_final/scenarios/", input$mapcrop, "/", input$mapcrop, "_scenario_summary.RData")
+    file_name <- paste0("data/", input$crop, "_scenario_summary.RData")
     get(load(file_name))
     colnames(crop_scenarios) <- c("cell", "scenario_percent", "x", "y", "observed_normal_yield",
                                   "nitrogen shock", "phosphorus shock",
@@ -721,7 +720,7 @@ server <- function(input, output) {
   
   output$productionraster <- renderLeaflet({
 
-    prod_change_raster <- raster(paste0(path_to_data, "results_final/prod_change_raster.tif"))
+    prod_change_raster <- raster(paste0("data/prod_change_raster.tif"))
     #prod_change_raster <- prod_change_raster * (-1)
     
     map <- mapview(prod_change_raster, maxpixels =  9331200)
