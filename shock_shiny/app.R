@@ -159,9 +159,12 @@ ui <- pagePiling(center = TRUE,
             ), #mainpanel ends
             
         
-        pageSection(menu = "inputs"),
+        pageSection(menu = "inputs",
+                    
+                    "There will be maps and plots of all the agricultural inputs here"),
         
-        pageSection(menu = "model"),
+        pageSection(menu = "model",
+                    "There will be a short description & scheme of the random forest model"),
         
         
         ###### Maps ######
@@ -279,7 +282,9 @@ ui <- pagePiling(center = TRUE,
                       )), #column ends
                       
                       
-                      column(9, plotOutput("agriplot"))
+                      column(9,
+                          column(11, plotOutput("agriplot")),
+                          column(1)) #buffer
                     ) #column ends
         ), #page ends
         
@@ -723,13 +728,13 @@ server <- function(input, output) {
     prod_change_raster <- raster(paste0("data/prod_change_raster.tif"))
     #prod_change_raster <- prod_change_raster * (-1)
     
-    map <- mapview(prod_change_raster, maxpixels =  9331200)
+    # map <- mapview(prod_change_raster, maxpixels =  9331200)
+    # 
+    # map@map
     
-    map@map
-    
-    # leaflet() %>%
-    #   addTiles() %>%
-    #   addRasterImage(prod_change_raster)
+    leaflet() %>%
+      addTiles() %>%
+      addRasterImage(prod_change_raster)
 
     # tm_shape(prod_change_raster) +
     #   tm_raster(style = "cont" , # draw gradient instead of classified
