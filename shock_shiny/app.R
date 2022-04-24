@@ -6,7 +6,14 @@
 #
 #    http://shiny.rstudio.com/
 #
-
+for (package in c("shiny", "ggplot2", "viridis", "plotly", "shinyWidgets",
+                  "tmap", "tmaptools", "terra", "sf", "leaflet", "raster",
+                  "scico", "dplyr", "tidyr", "scales", "wesanderson", "mapview",
+                  "fullPage")) {
+  if (!require(package, character.only=TRUE, quietly=TRUE)) {
+    install.packages(package)
+  }
+}
 library(shiny)
 library(ggplot2)
 library(viridis)
@@ -215,7 +222,8 @@ ui <- pagePiling(center = TRUE,
                                          selected = "barley"),
                              
                              radioButtons("tilescenario", "Select shock severity",
-                                          choices = c(25, 50, 75),
+                                          choiceNames = c("25%", "50%", "75%"),
+                                          choiceValues = c(25, 50, 75),
                                           selected = 50),
                              
                              radioButtons("tilecount", "Select to see either share of cells where yield decline was > 10% (share),
@@ -734,7 +742,9 @@ server <- function(input, output) {
     
     leaflet() %>%
       addTiles() %>%
-      addRasterImage(prod_change_raster)
+      addRasterImage(prod_change_raster, colors = pal_map, maxBytes = 1000000000) %>%
+      addLegend(pal = pal_map, values = c(-100, 0), title = "yield decrease %") %>%
+      setView(lng=30, lat=50, zoom =2)
 
     # tm_shape(prod_change_raster) +
     #   tm_raster(style = "cont" , # draw gradient instead of classified
