@@ -55,8 +55,9 @@ pal_bivariate <- c("#d3d3d3", "#b6cdcd", "#97c5c5", "#75bebe", "#52b6b6",
 
 scenario_pal <- viridis(n = 5, option = "magma", direction = -1)
 
-get(load(paste0(path_to_data, "results_final/prod_change_bardata.RData")))
-get(load(paste0(path_to_data, "results_final/prod_change_countries.RData")))
+get(load("data/prod_change_bardata.RData"))
+get(load("data/prod_change_countries.RData"))
+get(load("data/NSE_data.RData"))
 
 #prod_change_raster <- raster(paste0(path_to_data, "results_final/prod_change_raster_norm.tif"))
 
@@ -322,34 +323,43 @@ ui <- pagePiling(center = TRUE,
                  
                  ))),
         
+        ###### Performance ######
         pageSection(menu = "performance",
                     
               tabsetPanel(
                 tabPanel("NSE-scores",
-                         plotlyOutput("NSE")),
+                     fluidRow(
+                       column(3,
+                              "What does NSE mean and model performance in general?"),
+                       column(9,
+                         plotlyOutput("NSE")))),
+                
                 tabPanel("RMSE-scores",
+                    fluidRow(
+                      column(3,
                          selectInput("RMSE", label = "Select crop",
                                      choices = crop_list,
-                                     selected = "barley")
-                         ),
+                                     selected = "barley")),
+                      column(9,
+                             plotlyOutput("RMSE"))
+                         )),
                 tabPanel("ALE-plots",
                     fluidRow(
-                      
-                         
+                      column(3,   
                          selectInput("NSE", label = "Select crop",
                                      choices = crop_list,
                                      selected = "barley"),
                          sliderInput("RMSEbin", label = "Select climate bin",
                                      min = 1, max = 25, value = 10)
                          ),
+                      
+                      column(9,
+                             plotlyOutput("aleplot"))))
                     
                 
               )
                  
-                 )
-        
-        
-))
+                 ))
 
 
 
@@ -781,6 +791,47 @@ server <- function(input, output) {
       #           earth.boundary.color = "gray",
       #           frame = FALSE)
   })
+  
+
+  ###### Performance plots ######
+  
+  # NSE plot, data loaded already
+  
+  output$NSE <- renderPlotly({
+    
+    NSE_total_df$ones <- rep((rep(seq(1, 5, by= 1), 5)), 1)
+    NSE_total_df$tens <- rep((rep(seq(00, 20, by = 5), each= 5)), 1)
+    
+    NSE_pivot <- NSE_total_df %>%
+      dplyr::select(-bin)%>%
+      pivot_longer(c(1:12), names_to = "crop", values_to = "NSE")
+    
+    NSE_plot <- NSE_pivot %>%
+      ggplot(aes(ones, tens)) +
+      geom_tile(aes(fill = NSE)) + 
+      geom_text(aes(label = round(NSE, 2)), size = 2)+
+      xlab(paste("precipitation \u2192"))+
+      ylab(paste("temperature \u2192")) +
+      scale_fill_viridis(option = "cividis", direction = 1, name = "NSE", limits = c(0,1))+
+      ggtitle(paste0("NSE scores")) +
+      theme(axis.text.x = element_text(angle=90))+
+      theme_classic()+
+      theme(axis.line.x = element_blank(),
+            axis.line.y = element_blank(),
+            axis.ticks = element_blank(),
+            axis.text = element_blank(),
+            strip.background = element_blank()) +
+      facet_wrap(~crop, nrow = 3)
+    
+    ggplotly(NSE_plot)
+    
+  })
+  
+  
+  # _data <- reactive({
+  #   file_name <- paste0("data/", input$crop, "_scenario_summary.RData")
+  #   get(load(file_name))
+  # })
   
 }
 
