@@ -332,7 +332,9 @@ ui <- pagePiling(center = TRUE,
                        column(3,
                               "What does NSE mean and model performance in general?"),
                        column(9,
-                         plotlyOutput("NSE")))),
+                          column(11,
+                            plotlyOutput("NSE")),
+                          column(1)))),
                 
                 tabPanel("RMSE-scores",
                     fluidRow(
@@ -341,7 +343,9 @@ ui <- pagePiling(center = TRUE,
                                      choices = crop_list,
                                      selected = "barley")),
                       column(9,
-                             plotlyOutput("RMSE"))
+                          column(11,
+                             plotlyOutput("RMSE")),
+                          column(1))
                          )),
                 tabPanel("ALE-plots",
                     fluidRow(
@@ -828,10 +832,69 @@ server <- function(input, output) {
   })
   
   
-  # _data <- reactive({
-  #   file_name <- paste0("data/", input$crop, "_scenario_summary.RData")
-  #   get(load(file_name))
-  # })
+  RMSE_data <- reactive({
+    file_name <- paste0("data/RMSE/", input$RMSE, "_means.RData")
+    get(load(file_name))
+    
+    RMSE_scores <- crop_means.df %>%
+      dplyr::select(bin, train = rmse, test = RMSE)
+    
+    RMSE_long <- pivot_longer(RMSE_scores, 2:3,
+                              names_to = "variable", values_to = "value")
+    
+    file_name <- paste0("data/RMSE/", input$RMSE, "_stdevs.RData")
+    load(file_name)
+    
+    RMSE_sds <- crop_sds.df %>%
+      dplyr::select(bin, rmse_sd = rmse, RMSE_sd = RMSE)
+    
+    sds_long <- pivot_longer(RMSE_sds, cols = 2:3,
+                             names_to = "sd_name", values_to = "sd_value")
+    
+    sds_long <- sds_long %>%
+      dplyr::select(-bin)
+    
+    RMSE_long <- bind_cols(RMSE_long, sds_long)
+    
+    # RMSE_long$ones <- rep((rep(seq(1, 5, by= 1), 5)), 2)
+    # RMSE_long$tens <- rep((rep(seq(00, 20, by = 5), each= 5)), 2)
+    
+    #as.data.frame(RMSE_long)
+    
+  })
+  
+  
+  output$RMSE <- renderPlotly({
+    
+    # max_limit <- RMSE_data() %>%
+    #   dplyr::select(value) %>%
+    #   max()
+    
+    RMSE <- RMSE_data()
+    
+    RMSE$ones <- rep((rep(seq(1, 5, by= 1), 5)), 2)
+    RMSE$tens <- rep((rep(seq(00, 20, by = 5), each= 5)), 2)
+    
+    RMSE_plot <- RMSE %>%
+      ggplot(aes(ones, tens)) +
+        geom_tile(aes(fill = value)) + 
+        geom_text(aes(label = paste0(round(value, 2), "±", round(sd_value, 3)))) +
+        scale_fill_viridis(option = "cividis", direction = -1) +
+        xlab(paste("precipitation \u2192"))+
+        ylab(paste("temperature \u2192")) +
+        #ggtitle(paste0(crop_list[i], " train & test RMSE scores")) +
+        theme_classic()+
+        theme(axis.line.x = element_blank(),
+            axis.line.y = element_blank(),
+            axis.ticks = element_blank(),
+            axis.text = element_blank(),
+            strip.background = element_blank()) +
+        facet_wrap(~variable, nrow = 1)
+    
+    p <- ggplotly(RMSE_plot)
+    print(p)
+    
+  })
   
 }
 
