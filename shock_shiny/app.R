@@ -32,7 +32,7 @@ library(scales)
 library(wesanderson)
 library(mapview)
 library(fullPage)
-
+library(gridExtra)
 
 ##### Helper variables and functions #####
 
@@ -114,6 +114,86 @@ make_shock_raster_shiny <- function(crop_scenarios, shock_column, scenario_numbe
   
 }
 
+plot_one_loess_ale <- function(ale_dataframe, min, max, input_name_from_list, unit_from_list) {
+  
+  ale_plot <- ale_dataframe %>%
+    dplyr::filter(input_name == input_name_from_list)%>%
+    ggplot(aes(x = input_rate, y = ale_value, color = as.factor(bin)))+
+    geom_smooth(aes(group = as.factor(bin)), method="loess", size = 0.75, formula=y~x, span = 0.4, se = FALSE) +
+    scale_color_manual(name = "bin", values = pal_bivariate)+
+    scale_y_continuous(name = "ALE", limits = c(min, max))+
+    ggtitle(input_name_from_list)+
+    theme_light()+
+    theme(legend.position = "none",
+          axis.title = element_blank())
+  
+  ale_plot <- grid.arrange(ale_plot, bottom = grid::textGrob(unit_from_list))
+  
+  return(ale_plot)
+  
+}
+
+
+plot_all_loess_ales <- function(ale_dataframe) {
+  y_max <- max(ale_dataframe$ale_value)
+  y_min <- min(ale_dataframe$ale_value)
+  
+  plot_list <- list()
+  
+  input_list <- c("N-rate", "P-rate", "K-rate", "machinery",
+                  "pesticides", "irrigation")
+  
+  unit_list <- c("(kg/ha)", "(kg/ha)", "(kg/ha)", "(tractors/km2)", "(rescaled sum)", "(%)")
+  
+  
+  for (x in 1:length(input_list)) {
+    
+    plot_list[[x]] <- plot_one_loess_ale(ale_dataframe, y_min, y_max, input_list[x], unit_list[x])
+  }
+  
+  grid.arrange(grobs = plot_list, nrow = 2, bottom=grid::textGrob("input"), left=grid::textGrob("ALE-score", rot = 90), top=grid::textGrob(paste0(crop_list[i])))
+  
+}
+
+plot_one_ale <- function(ale_dataframe, min, max, input_name_from_list, unit_from_list) {
+  
+  ale_plot <- ale_dataframe %>%
+    dplyr::filter(input_name == input_name_from_list)%>%
+    ggplot()+
+    geom_line(aes(x = input_rate, y = ale_value, group = as.factor(iteration), color = "grey"))+
+    scale_y_continuous(name = "ALE", limits = c(min, max))+
+    scale_color_manual(name = "iteration", values = "gray")+
+    ggtitle(input_name_from_list)+
+    theme_light()+
+    theme(legend.position = "none",
+          axis.title = element_blank(),)
+  
+  ale_plot <- grid.arrange(ale_plot, bottom = grid::textGrob(unit_from_list))
+  
+  return(ale_plot)
+  
+}
+
+
+plot_all_ales <- function(ale_dataframe, bin) {
+  y_max <- max(ale_dataframe$ale_value)
+  y_min <- min(ale_dataframe$ale_value)
+  
+  plot_list <- list()
+  
+  input_list <- c("N-rate", "P-rate", "K-rate", "machinery",
+                  "pesticides", "irrigation")
+  
+  unit_list <- c("(kg/ha)", "(kg/ha)", "(kg/ha)", "(tractors/km2)", "(rescaled sum)", "(%)")
+  
+  for (x in 1:length(input_list)) {
+    
+    plot_list[[x]] <- plot_one_ale(ale_dataframe, y_min, y_max, input_list[x], unit_list[x])
+  }
+  
+  grid.arrange(grobs = plot_list, nrow = 2, bottom=grid::textGrob("input"), left=grid::textGrob("ALE-score", rot = 90), top=grid::textGrob(paste0(crop_list[i], " climatebin ", bin)))
+  
+}
 
 
 ##### UI #####
@@ -339,9 +419,11 @@ ui <- pagePiling(center = TRUE,
                 tabPanel("RMSE-scores",
                     fluidRow(
                       column(3,
+                        column(1),
+                        column(11,
                          selectInput("RMSE", label = "Select crop",
                                      choices = crop_list,
-                                     selected = "barley")),
+                                     selected = "barley"))),
                       column(9,
                           column(11,
                              plotlyOutput("RMSE")),
@@ -349,20 +431,24 @@ ui <- pagePiling(center = TRUE,
                          )),
                 tabPanel("ALE-plots",
                     fluidRow(
-                      column(3,   
-                         selectInput("NSE", label = "Select crop",
+                      column(3,
+                        column(1),
+                        column(11,
+                         selectInput("ALE", label = "Select crop",
                                      choices = crop_list,
                                      selected = "barley"),
-                         sliderInput("RMSEbin", label = "Select climate bin",
-                                     min = 1, max = 25, value = 10)
-                         ),
+                         sliderInput("ALEbin", label = "Select climate bin",
+                                     min = 1, max = 25, value = 10),
+                         checkboxInput("wholecropALE", label = "See ALE-scores for the whole crop:",
+                                       value = FALSE)
+                         
+                         )),
                       
                       column(9,
-                             plotlyOutput("aleplot"))))
-                    
-                
+                        column(11,
+                             plotOutput("aleplot")),
+                        column(1))))
               )
-                 
                  ))
 
 
@@ -406,21 +492,21 @@ server <- function(input, output) {
     climate_bins <- rast(raster_name)
   })
   
-  output$climatebinmap <- renderTmap({
-
-    tm_shape(bin_data()) +
-        tm_raster(style = "cont" , # draw gradient instead of classified
-                  palette = pal_bivariate,
-                  colorNA = "white",
-                  title = input$bincrop,
-                  legend.show = FALSE) +
-        tm_shape(World) +
-        tm_borders(col = "grey") +
-        tm_view(alpha = 1, set.view = c(30,50,2),
-                leaflet.options = ctrl_list,
-                view.legend.position = NA)
-
-  })
+  # output$climatebinmap <- renderTmap({
+  # 
+  #   tm_shape(bin_data()) +
+  #       tm_raster(style = "cont" , # draw gradient instead of classified
+  #                 palette = pal_bivariate,
+  #                 colorNA = "white",
+  #                 title = input$bincrop,
+  #                 legend.show = FALSE) +
+  #       tm_shape(World) +
+  #       tm_borders(col = "grey") +
+  #       tm_view(alpha = 1, set.view = c(30,50,2),
+  #               leaflet.options = ctrl_list,
+  #               view.legend.position = NA)
+  # 
+  # })
 
   
   
@@ -674,15 +760,15 @@ server <- function(input, output) {
   
   
   #render output
-  output$scenariomap <- 
-    
-    renderLeaflet({
-
-      leaflet() %>%
-        addTiles() %>%
-        addRasterImage(map_raster(), colors = pal_map, maxBytes = 1000000000) %>%
-        addLegend(pal = pal_map, values = c(-100, 0), title = "yield decrease %") %>%
-        setView(lng=30, lat=50, zoom =2)
+  # output$scenariomap <- 
+  #   
+  #   renderLeaflet({
+  # 
+  #     leaflet() %>%
+  #       addTiles() %>%
+  #       addRasterImage(map_raster(), colors = pal_map, maxBytes = 1000000000) %>%
+  #       addLegend(pal = pal_map, values = c(-100, 0), title = "yield decrease %") %>%
+  #       setView(lng=30, lat=50, zoom =2)
     
       #tmap method (does not work)
     #renderTmap({
@@ -704,7 +790,7 @@ server <- function(input, output) {
       # 
       # map@map
 
-   })
+   # })
   
   
   ###### Production plots ######
@@ -745,56 +831,56 @@ server <- function(input, output) {
   })
   
   
-  output$productionraster <- renderLeaflet({
-
-    prod_change_raster <- raster(paste0("data/prod_change_raster.tif"))
-    #prod_change_raster <- prod_change_raster * (-1)
-    
-    # map <- mapview(prod_change_raster, maxpixels =  9331200)
-    # 
-    # map@map
-    
-    leaflet() %>%
-      addTiles() %>%
-      addRasterImage(prod_change_raster, colors = pal_map, maxBytes = 1000000000) %>%
-      addLegend(pal = pal_map, values = c(-100, 0), title = "yield decrease %") %>%
-      setView(lng=30, lat=50, zoom =2)
-
-    # tm_shape(prod_change_raster) +
-    #   tm_raster(style = "cont" , # draw gradient instead of classified
-    #             palette = scenario_pal,
-    #             colorNA = "white",
-    #             breaks = seq(0, 100, 25),
-    #             legend.reverse = FALSE,
-    #             ) +
-    #   tm_shape(World) +
-    #   tm_borders(col = "grey") +
-    #   tm_view(alpha = 1, set.view = c(30,50,2),
-    #           leaflet.options = ctrl_list,
-    #           view.legend.position = NA)
-
-  })
+  # output$productionraster <- renderLeaflet({
+  # 
+  #   prod_change_raster <- raster(paste0("data/prod_change_raster.tif"))
+  #   #prod_change_raster <- prod_change_raster * (-1)
+  #   
+  #   # map <- mapview(prod_change_raster, maxpixels =  9331200)
+  #   # 
+  #   # map@map
+  #   
+  #   leaflet() %>%
+  #     addTiles() %>%
+  #     addRasterImage(prod_change_raster, colors = pal_map, maxBytes = 1000000000) %>%
+  #     addLegend(pal = pal_map, values = c(-100, 0), title = "yield decrease %") %>%
+  #     setView(lng=30, lat=50, zoom =2)
+  # 
+  #   # tm_shape(prod_change_raster) +
+  #   #   tm_raster(style = "cont" , # draw gradient instead of classified
+  #   #             palette = scenario_pal,
+  #   #             colorNA = "white",
+  #   #             breaks = seq(0, 100, 25),
+  #   #             legend.reverse = FALSE,
+  #   #             ) +
+  #   #   tm_shape(World) +
+  #   #   tm_borders(col = "grey") +
+  #   #   tm_view(alpha = 1, set.view = c(30,50,2),
+  #   #           leaflet.options = ctrl_list,
+  #   #           view.legend.position = NA)
+  # 
+  # })
   
-  output$productioncountries <- renderTmap({
-    
-    tm_shape(World_sp)+
-      tm_polygons("prod_change",
-                  style="cont",
-                  palette = viridis(n = 5, option = "magma", direction = -1),
-                  breaks = seq(-75, 0, 25),
-                  legend.reverse = FALSE,
-                  title = "decrease %")+
-      tm_view(set.view = c(30,50,2))
-      # tm_layout(main.title = "Change in production in all 12 crops after 50% shock in all inputs",
-      #           main.title.size = 1,
-      #           bg.color = "white",
-      #           legend.show = TRUE,
-      #           legend.outside = TRUE,
-      #           #legend.outside.position = c("left", "bottom"),
-      #           earth.boundary = c(-180, 180, -90, 90),
-      #           earth.boundary.color = "gray",
-      #           frame = FALSE)
-  })
+  # output$productioncountries <- renderTmap({
+  #   
+  #   tm_shape(World_sp)+
+  #     tm_polygons("prod_change",
+  #                 style="cont",
+  #                 palette = viridis(n = 5, option = "magma", direction = -1),
+  #                 breaks = seq(-75, 0, 25),
+  #                 legend.reverse = FALSE,
+  #                 title = "decrease %")+
+  #     tm_view(set.view = c(30,50,2))
+  #     # tm_layout(main.title = "Change in production in all 12 crops after 50% shock in all inputs",
+  #     #           main.title.size = 1,
+  #     #           bg.color = "white",
+  #     #           legend.show = TRUE,
+  #     #           legend.outside = TRUE,
+  #     #           #legend.outside.position = c("left", "bottom"),
+  #     #           earth.boundary = c(-180, 180, -90, 90),
+  #     #           earth.boundary.color = "gray",
+  #     #           frame = FALSE)
+  # })
   
 
   ###### Performance plots ######
@@ -802,17 +888,17 @@ server <- function(input, output) {
   # NSE plot, data loaded already
   
   output$NSE <- renderPlotly({
-    
+
     NSE_total_df$ones <- rep((rep(seq(1, 5, by= 1), 5)), 1)
     NSE_total_df$tens <- rep((rep(seq(00, 20, by = 5), each= 5)), 1)
-    
+
     NSE_pivot <- NSE_total_df %>%
       dplyr::select(-bin)%>%
       pivot_longer(c(1:12), names_to = "crop", values_to = "NSE")
-    
+
     NSE_plot <- NSE_pivot %>%
       ggplot(aes(ones, tens)) +
-      geom_tile(aes(fill = NSE)) + 
+      geom_tile(aes(fill = NSE)) +
       geom_text(aes(label = round(NSE, 2)), size = 2)+
       xlab(paste("precipitation \u2192"))+
       ylab(paste("temperature \u2192")) +
@@ -826,75 +912,73 @@ server <- function(input, output) {
             axis.text = element_blank(),
             strip.background = element_blank()) +
       facet_wrap(~crop, nrow = 3)
-    
+
     ggplotly(NSE_plot)
-    
+
   })
   
   
   RMSE_data <- reactive({
-    file_name <- paste0("data/RMSE/", input$RMSE, "_means.RData")
+    file_name <- paste0("data/RMSE/", input$RMSE, "_RMSE.RData")
     get(load(file_name))
-    
-    RMSE_scores <- crop_means.df %>%
-      dplyr::select(bin, train = rmse, test = RMSE)
-    
-    RMSE_long <- pivot_longer(RMSE_scores, 2:3,
-                              names_to = "variable", values_to = "value")
-    
-    file_name <- paste0("data/RMSE/", input$RMSE, "_stdevs.RData")
-    load(file_name)
-    
-    RMSE_sds <- crop_sds.df %>%
-      dplyr::select(bin, rmse_sd = rmse, RMSE_sd = RMSE)
-    
-    sds_long <- pivot_longer(RMSE_sds, cols = 2:3,
-                             names_to = "sd_name", values_to = "sd_value")
-    
-    sds_long <- sds_long %>%
-      dplyr::select(-bin)
-    
-    RMSE_long <- bind_cols(RMSE_long, sds_long)
-    
-    # RMSE_long$ones <- rep((rep(seq(1, 5, by= 1), 5)), 2)
-    # RMSE_long$tens <- rep((rep(seq(00, 20, by = 5), each= 5)), 2)
-    
-    #as.data.frame(RMSE_long)
     
   })
   
   
   output$RMSE <- renderPlotly({
     
-    # max_limit <- RMSE_data() %>%
-    #   dplyr::select(value) %>%
-    #   max()
     
-    RMSE <- RMSE_data()
-    
-    RMSE$ones <- rep((rep(seq(1, 5, by= 1), 5)), 2)
-    RMSE$tens <- rep((rep(seq(00, 20, by = 5), each= 5)), 2)
-    
-    RMSE_plot <- RMSE %>%
+    RMSE_plot <- RMSE_data() %>%
       ggplot(aes(ones, tens)) +
-        geom_tile(aes(fill = value)) + 
-        geom_text(aes(label = paste0(round(value, 2), "±", round(sd_value, 3)))) +
+        geom_tile(aes(fill = RMSE)) + 
+        geom_text(aes(label = paste0(round(RMSE, 2), "±", round(sd_value, 3)))) +
         scale_fill_viridis(option = "cividis", direction = -1) +
         xlab(paste("precipitation \u2192"))+
         ylab(paste("temperature \u2192")) +
-        #ggtitle(paste0(crop_list[i], " train & test RMSE scores")) +
         theme_classic()+
         theme(axis.line.x = element_blank(),
             axis.line.y = element_blank(),
             axis.ticks = element_blank(),
             axis.text = element_blank(),
             strip.background = element_blank()) +
-        facet_wrap(~variable, nrow = 1)
+        facet_wrap(~traintest, nrow = 1)
     
-    p <- ggplotly(RMSE_plot)
-    print(p)
+    ggplotly(RMSE_plot)
+    
     
   })
+  
+  ###### ALE-plots ######
+  
+  ALE_data <- reactive({
+    file_name <- paste0("data/ALES/", input$ALE, "_ALEs.RData")
+    get(load(file_name))
+    
+  })
+  
+  
+  bin_ALE_data <- reactive({
+    
+    ALE_data() %>%
+      dplyr::filter(bin == input$ALEbin)
+    
+  })
+  
+  output$aleplot <- renderPlot({
+    
+    
+    if (input$wholecropALE) {
+    
+      plot_all_loess_ales(ALE_data())
+      
+    } else {
+      
+      plot_all_ales(bin_ALE_data(), input$ALEbin)
+      
+    }
+    
+  })
+  
   
 }
 
