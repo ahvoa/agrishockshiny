@@ -119,7 +119,7 @@ plot_one_loess_ale <- function(ale_dataframe, min, max, input_name_from_list, un
   ale_plot <- ale_dataframe %>%
     dplyr::filter(input_name == input_name_from_list)%>%
     ggplot(aes(x = input_rate, y = ale_value, color = as.factor(bin)))+
-    geom_smooth(aes(group = as.factor(bin)), method="loess", size = 0.75, formula=y~x, span = 0.4, se = FALSE) +
+    geom_smooth(aes(group = as.factor(bin)), method="loess", size = 0.75, formula=y~x, span = 0.6, se = FALSE) +
     scale_color_manual(name = "bin", values = pal_bivariate)+
     scale_y_continuous(name = "ALE", limits = c(min, max))+
     ggtitle(input_name_from_list)+
@@ -175,7 +175,7 @@ plot_one_ale <- function(ale_dataframe, min, max, input_name_from_list, unit_fro
 }
 
 
-plot_all_ales <- function(ale_dataframe, bin) {
+plot_all_ales <- function(ale_dataframe, crop, bin) {
   y_max <- max(ale_dataframe$ale_value)
   y_min <- min(ale_dataframe$ale_value)
   
@@ -191,7 +191,7 @@ plot_all_ales <- function(ale_dataframe, bin) {
     plot_list[[x]] <- plot_one_ale(ale_dataframe, y_min, y_max, input_list[x], unit_list[x])
   }
   
-  grid.arrange(grobs = plot_list, nrow = 2, bottom=grid::textGrob("input"), left=grid::textGrob("ALE-score", rot = 90), top=grid::textGrob(paste0(crop_list[i], " climatebin ", bin)))
+  grid.arrange(grobs = plot_list, nrow = 2, bottom=grid::textGrob("input"), left=grid::textGrob("ALE-score", rot = 90), top=grid::textGrob(paste0(crop, " climatebin ", bin)))
   
 }
 
@@ -218,12 +218,15 @@ ui <- pagePiling(center = TRUE,
                    "Scatterplots" = "scatter",
                    "Production" = "production",
                    "Model performance" = "performance"),
+                 
+              
         
         ###### Start tab ######         
         pageSection(menu = "intro", 
                  h2("Agricultural input shocks"),
         ),
 
+        ###### Climate tab ######
         pageSection(menu = "climate",
                fluidRow(
                  
@@ -234,7 +237,7 @@ ui <- pagePiling(center = TRUE,
                                           choices = crop_list,
                                           selected = "barley"),
                               
-                              plotOutput("binlegend"))),
+                              img(src = "climate_png.png", width = "100%"))),
                  
                   column(9,
                          column(11, tmapOutput("climatebinmap")),
@@ -246,11 +249,30 @@ ui <- pagePiling(center = TRUE,
               
             ), #mainpanel ends
             
-        
+        ###### Inputs tab ######
         pageSection(menu = "inputs",
+              fluidRow(
+                column(3,
+                       selectInput("inputcrop", "Select crop",
+                                   choices = crop_list,
+                                   selected = "barley")),
+                column(4,
+                       selectInput("agriinput", "Select agricultural input",
+                                   choices = c("nitrogen fertilizer", 
+                                               "phosphorus fertilizer",
+                                               "potassium fertilizer", 
+                                               "machinery",
+                                               "pesticides"),
+                                   selected = "nitrogen fertilizer")),
+                column(4,
+                       )),
+              fluidRow(
+                
+              ),
                     
                     "There will be maps and plots of all the agricultural inputs here"),
         
+        ###### Model tab ######
         pageSection(menu = "model",
                     "There will be a short description & scheme of the random forest model"),
         
@@ -277,10 +299,13 @@ ui <- pagePiling(center = TRUE,
                                                   "fertilizer shock", "shock in all inputs"), 
                                       selected = "nitrogen shock"),
                           
-                          radioButtons("mapscenario", "Select shock severity:",
+                          prettyRadioButtons("mapscenario", "Select shock severity:",
                                        choiceNames = c("25%", "50%", "75%"),
                                        choiceValues = c(25, 50, 75),
-                                       selected = 50)
+                                       selected = 50,
+                                       status = "warning",
+                                       outline = FALSE,
+                                       animation = "smooth")
                           )),
                    
                    column(9,
@@ -302,19 +327,28 @@ ui <- pagePiling(center = TRUE,
                                          choices = crop_list,
                                          selected = "barley"),
                              
-                             radioButtons("tilescenario", "Select shock severity",
-                                          choiceNames = c("25%", "50%", "75%"),
-                                          choiceValues = c(25, 50, 75),
-                                          selected = 50),
+                             prettyRadioButtons("tilescenario", "Select shock severity",
+                                          choices = list("25%" = 25, "50%" = 50, "75%" = 75),
+                                          #choiceValues = c(25, 50, 75),
+                                          selected = 50,
+                                          status = "warning",
+                                          outline = FALSE,
+                                          animation = "smooth"),
                              
-                             radioButtons("tilecount", "Select to see either share of cells where yield decline was > 10% (share),
+                             prettyRadioButtons("tilecount", "Select to see either share of cells where yield decline was > 10% (share),
                             or the mean decline in the cells where yield decline was > 10% (mean)",
                                           choices = c("share", "mean"),
-                                          selected = "share"),
+                                          selected = "share",
+                                          status = "warning",
+                                          outline = FALSE,
+                                          animation = "smooth"),
                              
-                             checkboxInput("tileclimate", "Select if you would like to see
-                                 tileplots grouped in climate bins",
-                                           value = FALSE)
+                             "Select if you would like to see tileplots grouped in climate bins",
+                             prettyCheckbox("tileclimate", " ",
+                                           value = FALSE,
+                                           status = "warning",
+                                           fill = TRUE,
+                                           animation = "smooth")
                              
                       )),
                       
@@ -329,7 +363,7 @@ ui <- pagePiling(center = TRUE,
         ###### Scatter tab ######
         pageSection(menu = "scatter",
                     
-                fluidRow(
+                fluidRow(chooseSliderSkin("Flat", color = "#5B1A18"),
                       
                       column(3,
                         column(1),
@@ -364,9 +398,12 @@ ui <- pagePiling(center = TRUE,
                                                      "pesticides"),
                                          selected = "nitrogen fertilizer"),
                              
-                             checkboxInput("abline",
+                             prettyCheckbox("abline",
                                            label = "Show 1:1 line",
-                                           value = FALSE)
+                                           value = FALSE,
+                                           status = "warning",
+                                           fill = TRUE,
+                                           animation = "smooth")
                              
                       )), #column ends
                       
@@ -410,7 +447,9 @@ ui <- pagePiling(center = TRUE,
                 tabPanel("NSE-scores",
                      fluidRow(
                        column(3,
-                              "What does NSE mean and model performance in general?"),
+                          column(1),
+                          column(11,
+                              "What does NSE mean and model performance in general?")),
                        column(9,
                           column(11,
                             plotlyOutput("NSE")),
@@ -426,7 +465,7 @@ ui <- pagePiling(center = TRUE,
                                      selected = "barley"))),
                       column(9,
                           column(11,
-                             plotlyOutput("RMSE")),
+                             plotOutput("RMSE")),
                           column(1))
                          )),
                 tabPanel("ALE-plots",
@@ -439,8 +478,9 @@ ui <- pagePiling(center = TRUE,
                                      selected = "barley"),
                          sliderInput("ALEbin", label = "Select climate bin",
                                      min = 1, max = 25, value = 10),
-                         checkboxInput("wholecropALE", label = "See ALE-scores for the whole crop:",
-                                       value = FALSE)
+                         checkboxInput("wholecropALE", label = "See ALE-scores for the whole crop",
+                                       value = FALSE),
+                         img(src = "climate_png.png", width = "100%")
                          
                          )),
                       
@@ -458,55 +498,27 @@ ui <- pagePiling(center = TRUE,
 server <- function(input, output) {
   
   ###### Climate bin plots ######
-  output$binlegend <- renderPlot({
-    bins <- as.data.frame(as.factor(seq(1, 25)))
-    
-    names(bins) <- "bin"
-    
-    bins$ones <- rep((rep(seq(1, 5, by= 1), 5)), 1)
-    bins$tens <- rep((rep(seq(00, 20, by = 5), each= 5)), 1)
-    
-    bin_legend <- ggplot(data = bins, aes(ones, tens)) +
-      geom_tile(aes(fill = bin)) + 
-      geom_text(aes(label = bin, size = 2))+
-      xlab(paste("precipitation \u2192"))+
-      ylab(paste("temperature \u2192")) +
-      scale_fill_manual(values = pal_bivariate) +
-      theme_classic()+
-      theme(legend.position = "none",
-            plot.title = element_text(hjust = 0.5),
-            axis.line.x = element_blank(),
-            axis.line.y = element_blank(),
-            axis.title.y = element_text(margin = ggplot2::margin(0, -20, 0,0))) +
-      ggtitle(paste0("Climate bins")) +
-      scale_y_discrete(breaks=NULL)+
-      scale_x_discrete(breaks = NULL)
-    
-    plot(bin_legend)
-    
-    
-  })
   
   bin_data <- reactive({
     raster_name <- paste0('data/', input$bincrop, "_binmatrix.tif")
     climate_bins <- rast(raster_name)
   })
   
-  # output$climatebinmap <- renderTmap({
-  # 
-  #   tm_shape(bin_data()) +
-  #       tm_raster(style = "cont" , # draw gradient instead of classified
-  #                 palette = pal_bivariate,
-  #                 colorNA = "white",
-  #                 title = input$bincrop,
-  #                 legend.show = FALSE) +
-  #       tm_shape(World) +
-  #       tm_borders(col = "grey") +
-  #       tm_view(alpha = 1, set.view = c(30,50,2),
-  #               leaflet.options = ctrl_list,
-  #               view.legend.position = NA)
-  # 
-  # })
+  output$climatebinmap <- renderTmap({
+
+    tm_shape(bin_data()) +
+        tm_raster(style = "cont" , # draw gradient instead of classified
+                  palette = pal_bivariate,
+                  colorNA = "white",
+                  title = input$bincrop,
+                  legend.show = FALSE) +
+        tm_shape(World) +
+        tm_borders(col = "grey") +
+        tm_view(alpha = 1, set.view = c(30,50,2),
+                leaflet.options = ctrl_list,
+                view.legend.position = NA)
+
+  })
 
   
   
@@ -925,10 +937,10 @@ server <- function(input, output) {
   })
   
   
-  output$RMSE <- renderPlotly({
+  output$RMSE <- renderPlot({
     
     
-    RMSE_plot <- RMSE_data() %>%
+    RMSE_data() %>%
       ggplot(aes(ones, tens)) +
         geom_tile(aes(fill = RMSE)) + 
         geom_text(aes(label = paste0(round(RMSE, 2), "±", round(sd_value, 3)))) +
@@ -943,7 +955,7 @@ server <- function(input, output) {
             strip.background = element_blank()) +
         facet_wrap(~traintest, nrow = 1)
     
-    ggplotly(RMSE_plot)
+    #ggplotly(RMSE_plot)
     
     
   })
@@ -973,7 +985,7 @@ server <- function(input, output) {
       
     } else {
       
-      plot_all_ales(bin_ALE_data(), input$ALEbin)
+      plot_all_ales(bin_ALE_data(), input$ALE, input$ALEbin)
       
     }
     
