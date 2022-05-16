@@ -42,6 +42,7 @@ data("World")
 rob_crs <- "+proj=robin +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +units=m"
 #change projection on raster and World vector
 data("World")
+World_geo <- World$geometry
 World_rob <- st_transform(World, rob_crs)
 tmap_options(max.raster = c(plot = 1e9, view = 1e9))
 ctrl_list <- list(attributionControl = FALSE,
@@ -54,12 +55,27 @@ pal_bivariate <- c("#d3d3d3", "#b6cdcd", "#97c5c5", "#75bebe", "#52b6b6",
                    "#e17e06", "#c27b06", "#a17606", "#7d7206", "#576d05")
 
 scenario_pal <- viridis(n = 5, option = "magma", direction = -1)
+pal_map <- colorNumeric("magma", domain = c(-100, 0), reverse = FALSE, na.color = NA)
+input_color_list <- list("nitrogen" = "#326286",
+                         "phosphorus" =  "#CF5422",
+                         "potassium" =  "#FD6467",
+                         "machinery" =  "#4E2E74",
+                         "pesticides" =  "#5B1A18",
+                         "crop yield" =  "#157567")
+
+input_unit_list <- list("nitrogen" = "kg/ha",
+                        "phosphorus" =  "kg/ha",
+                        "potassium" =  "kg/ha",
+                        "machinery" =  "tractors/km2",
+                        "pesticides" =  "rescaled sum",
+                        "crop yield" =  "t/ha")
+
 
 get(load("data/prod_change_bardata.RData"))
 get(load("data/prod_change_countries.RData"))
 get(load("data/NSE_data.RData"))
 
-#prod_change_raster <- raster(paste0(path_to_data, "results_final/prod_change_raster_norm.tif"))
+prod_change_raster <- raster(paste0(path_to_data, "results_final/prod_change_raster_norm.tif"))
 
 make_shock_raster_shiny <- function(crop_scenarios, shock_column, scenario_number) {
   
@@ -71,7 +87,7 @@ make_shock_raster_shiny <- function(crop_scenarios, shock_column, scenario_numbe
     dplyr::select(cell, shock_value)
   
   #turn all positive values to zero
-  #raster_data$shock_value[raster_data$shock_value > 0] <- 0
+  raster_data$shock_value[raster_data$shock_value > 0] <- 0
   raster_data$shock_value <- round(raster_data$shock_value)
   
   #get a raster file to input shock values to
@@ -109,6 +125,43 @@ make_shock_raster_shiny <- function(crop_scenarios, shock_column, scenario_numbe
   # 
   # #substitute base raster shock mask area with result values
   # final_raster[shock_mask] <- shock_vec
+  
+  return(shock_raster)
+  
+}
+
+make_input_raster_shiny <- function(crop_scenarios, shock_column, scenario_number) {
+  
+  #select data for raster, make columns of scenario percents
+  raster_data <- crop_scenarios %>%
+    dplyr::select(cell, shock = shock_column, scenario_percent) %>%
+    dplyr::filter(scenario_percent == scenario_number)%>%
+    dplyr::select(cell, shock)
+  
+  #turn all positive values to zero
+  #raster_data$shock_value[raster_data$shock_value > 0] <- 0
+  #raster_data$shock_value <- round(raster_data$shock)
+  
+  #get a raster file to input shock values to
+  earthstat_file <- list.files(path = "C:/Users/ahvoa1/data/EarthStat/",
+                               recursive = TRUE, pattern = paste0(crop_list[1], "_YieldPerHectare.tif"), full.names = TRUE)
+  yield_raster <- rast(earthstat_file)
+  
+  #substitute all values of the raster
+  yield_raster[] <- 9999
+  
+  #create a dataframe of the raster with cell numbers and coordinates
+  yield_df <- terra::as.data.frame(yield_raster, xy = TRUE, cells = TRUE)
+  
+  #join shock data to empty raster by cell number
+  raster_data_with_all_cells <- left_join(yield_df, raster_data, by = "cell")
+  #delete cell number column and yield column
+  raster_data_with_all_cells <- raster_data_with_all_cells %>%
+    dplyr::select(-cell, -barley_YieldPerHectare)
+  
+  #create raster
+  shock_raster <- rasterFromXYZ(raster_data_with_all_cells, res = c(0.08333333, 0.08333333), crs = "+proj=longlat +datum=WGS84", digits = 6)
+  #shock_raster <- rast(shock_raster)
   
   return(shock_raster)
   
@@ -208,38 +261,77 @@ ui <- pagePiling(center = TRUE,
                                     "white",
                                     "white",
                                     "white"),
+                
                  menu = c(
                    "Start" = "intro",
                    "Climate bins" = "climate",
                    "Agricultural inputs" = "inputs",
-                   "Random forest" = "model",
+                   "Model" = "model",
                    "Scenario maps" = "maps",
                    "Tileplots" = "tiles",
                    "Scatterplots" = "scatter",
                    "Production" = "production",
                    "Model performance" = "performance"),
                  
-              
+                 
         
         ###### Start tab ######         
         pageSection(menu = "intro", 
-                 h2("Agricultural input shocks"),
-        ),
+                 h1("Agricultural input shocks"),
+                 h3("What we depend on to grow food and how"),
+                 br(),
+                 br(),
+                 br(),
+            fluidRow(
+              column(6,
+                column(2),
+                column(9,
+                       h4("Food production today is more global than ever. 
+                          Food trade ensures adequate and diverse food even in 
+                          areas with low self-sufficiency. Foodstuffs are being 
+                          traded across the world, but so are agricultural inputs
+                          such as fertilizers, machinery, and pesticides. Shocks 
+                          and disturbances in the trade flows of agricultural inputs,
+                          caused by e.g. conflict, may be devastating to the food 
+                          production and yields of otherwise self-sufficient countries.
+                          This aspect of food security and resilience requires more attention.
+                          In this study, we modelled the effects of agricultural input 
+                          shocks using global spatial data on crop yields, fertilizers,
+                          machinery and pesticides with random forest, a machine 
+                          learning algorithm.")),
+                column(1)
+                
+                  ),
+              column(6,
+                  column(11,
+                         img(src = "inputs.png", width = "100%")),
+                  column(1))
+              
+            ),
+        
+
+                 ),
 
         ###### Climate tab ######
         pageSection(menu = "climate",
                fluidRow(
                  
-                 column(3,
+                 column(4,
                         column(1),
-                        column(11, "Climate bin info ",
+                        column(11, 
+                               br(),
+                               br(),
+                               tags$p("Climate affects how crops grow. To eliminate that effect and only study agricultural inputs,
+                               we divided each crop into climate zones or bins according to temperature and precipitation. 
+                               We then analyzed and modelled each bin individually."),
+                               tags$p("Check out the climate bins of all crops below."),
                               selectInput("bincrop", label = "Select crop",
                                           choices = crop_list,
                                           selected = "barley"),
                               
                               img(src = "climate_png.png", width = "100%"))),
                  
-                  column(9,
+                  column(8,
                          column(11, tmapOutput("climatebinmap")),
                          column(1))
                        
@@ -253,42 +345,71 @@ ui <- pagePiling(center = TRUE,
         pageSection(menu = "inputs",
               fluidRow(
                 column(1),
-                column(3,
+                column(4,
                        column(2),
                        column(10,
                        selectInput("inputcrop", "Select crop",
                                    choices = crop_list,
                                    selected = "barley"))),
-                column(3,
+                column(4,
                     column(2),
                     column(10,
                        selectInput("agriinput", "Select agricultural input",
-                                   choices = c("nitrogen fertilizer", 
-                                               "phosphorus fertilizer",
-                                               "potassium fertilizer", 
+                                   choices = c("crop yield", 
+                                               "nitrogen", 
+                                               "phosphorus",
+                                               "potassium", 
                                                "machinery",
                                                "pesticides"),
-                                   selected = "nitrogen fertilizer"))),
-                column(3,
-                       prettyRadioButtons("mapinput", "Show map or climate bin averages",
-                                          choices = c("map", "bins"),
-                                          selected = "map",
-                                          inline = TRUE,
-                                          status = "warning",
-                                          outline = FALSE,
-                                          animation = "smooth")),
-                column(1)),
+                                   selected = "nitrogen"))),
+            
+                column(2)),
               fluidRow(
+                column(7,
+                       leafletOutput("inputmap")
+                       ),
+                column(5,
+                  column(11,
+                       plotlyOutput("inputtile")),
+                  column(1))
                 
-              ),
+                
+              )),
                     
-                    "There will be maps and plots of all the agricultural inputs here"),
-        
+
         ###### Model tab ######
         pageSection(menu = "model",
-                    "There will be a short description & scheme of the random forest model"),
-        
-        
+                h1("How did we do it?"),
+                br(),
+                
+              fluidRow(
+                    column(8,
+                      column(1),
+                      column(11,
+                        tags$p("machine learning method, random forest. 
+                           Random forest builds hundreds of decision
+                           trees or regression trees and then the model
+                           output is an average of all the trees.
+                           "))),
+                    column(3, img(src = "make_model.png", width = "100%"))),
+              hr(),
+              br(),
+              fluidRow("Texttexttext"),
+              br(),
+
+              fluidRow(
+                column(1),
+                column(5,
+                       img(src = "use_model.png", width = "100%")),
+                column(4, offset = 1,
+                       "New data was created with a decrease of 25%, 50% or 75% in either:",
+                      h5(strong("nitrogen")), h5(strong("phosphorus")), 
+                      h5(strong("potassium")), h5(strong("machinery")),
+                      h5(strong("pesticides"))
+                      
+                    ))),
+                    
+                    
         ###### Maps ######
         
         pageSection(menu = "maps",
@@ -403,12 +524,12 @@ ui <- pagePiling(center = TRUE,
                              
                              selectInput("agri", 
                                          label = "Choose agricultural input rate (colour):",
-                                         choices = c("nitrogen fertilizer", 
-                                                     "phosphorus fertilizer",
-                                                     "potassium fertilizer", 
+                                         choices = c("nitrogen", 
+                                                     "phosphorus",
+                                                     "potassium", 
                                                      "machinery",
                                                      "pesticides"),
-                                         selected = "nitrogen fertilizer"),
+                                         selected = "nitrogen"),
                              
                              prettyCheckbox("abline",
                                            label = "Show 1:1 line",
@@ -439,12 +560,27 @@ ui <- pagePiling(center = TRUE,
                       tabsetPanel(
                         
                         tabPanel("Different crops",
-                                  plotlyOutput("productionbars")),    
+                            column(3,
+                                   br(),
+                                   br(),
+                                   tags$p("The effects of agricultural input shocks 
+                                          can also be examined through production, or total volume of cultivated crop."),
+                                   
+                                   tags$p("Production is", strong("yield * harvested area"), ". In this barplot you can examine
+                                          shock effects on the global production of different crops individually."),
+                                   tags$p("In the tabs ", tags$i("All crops"),
+                                          "you can see the effects on all 12 crops summed together.
+                                          In the tab", tags$i("All countries"), "production decreases are summed for whole countries.")),
+                            
+                            column(9,
+                                  plotlyOutput("productionbars"))),    
                       
                         tabPanel("All crops",
+                                 h5("Change in production for all 12 crops after 50% shock in all inputs"),
                                   tmapOutput("productionraster")),
                       
                         tabPanel("All countries",
+                                 h5("Countrywise change in the total production of all 12 crops after 50% shock in all inputs"),
                                   tmapOutput("productioncountries"))
                       
                    )),
@@ -461,10 +597,16 @@ ui <- pagePiling(center = TRUE,
                        column(3,
                           column(1),
                           column(11,
-                              "What does NSE mean and model performance in general?")),
+                                 br(),
+                                 br(),
+                              tags$p("Model performance can be measured by comparing results generated by the model to 
+                                     results we know previously. In this case, random forest modelled yields that we compared to
+                                      known yields. NSE or ", tags$i("Nash-Sutcliffe Efficiency"), " is one measure of 
+                                      the models predicting power. A model with NSE score 1 is a perfect model, and models between 0-1 are
+                                      acceptable. Models with NSE > 0.65 are good and NSE > 0.75 are very good."))),
                        column(9,
                           column(11,
-                            plotlyOutput("NSE")),
+                            plotOutput("NSE")),
                           column(1)))),
                 
                 tabPanel("RMSE-scores",
@@ -472,6 +614,14 @@ ui <- pagePiling(center = TRUE,
                       column(3,
                         column(1),
                         column(11,
+                               br(),
+                               br(),
+                               tags$p("RMSE or ", tags$i("Root Mean Square Error"), " is another measure of model performance.
+                                      Here we see RMSE-values calculated from when training the model ", tags$strong("(train)"), "and then again when testing
+                                       with external data ", tags$strong("(test)"), ". If the RMSE-scores are not significantly 
+                                      different between train and test, the model does not overfit."),
+                               br(),
+                               br(),
                          selectInput("RMSE", label = "Select crop",
                                      choices = crop_list,
                                      selected = "barley"))),
@@ -482,9 +632,13 @@ ui <- pagePiling(center = TRUE,
                          )),
                 tabPanel("ALE-plots",
                     fluidRow(
-                      column(3,
+                      column(4,
                         column(1),
                         column(11,
+                               tags$p("Model behaviour can be measured with ALE or ",
+                                      tags$i("Accumulated Local Effects."), 
+                                             "The ALE score is the parameter effect in relation to the average of the model."),
+                              
                          selectInput("ALE", label = "Select crop",
                                      choices = crop_list,
                                      selected = "barley"),
@@ -499,7 +653,7 @@ ui <- pagePiling(center = TRUE,
                          
                          )),
                       
-                      column(9,
+                      column(8,
                         column(11,
                              plotOutput("aleplot")),
                         column(1))))
@@ -535,7 +689,81 @@ server <- function(input, output) {
 
   })
 
+  ###### Input plots ######
   
+  #load data
+  input_map_data <- reactive({
+    file_name <- paste0("data/", input$inputcrop, "_scenario_summary.RData")
+    get(load(file_name))
+    colnames(crop_scenarios) <- c("cell", "scenario_percent", "x", "y", "crop yield",
+                                  "nitrogen shock", "phosphorus shock",
+                                  "potassium shock", "machinery shock",
+                                  "pesticide shock", "fertilizer shock", 
+                                  "shock in all inputs", "bin", "nitrogen", 
+                                  "phosphorus","potassium", "machinery",
+                                  "pesticides", "irrigation")
+    as.data.frame(crop_scenarios)
+  })
+  
+  #make raster
+  input_raster <- reactive({
+    
+    input_raster <- make_input_raster_shiny(input_map_data(), input$agriinput, 50)
+    names(input_raster) <- paste(input$agriinput, unlist(input_unit_list[input$agriinput]))
+    input_raster
+    
+  })
+  
+  
+  #render output
+
+  output$inputmap <- renderLeaflet({
+    
+    map <- mapview(input_raster(),
+                   use.layer.names = TRUE,
+                   col.regions = c("#F9E1C3", unlist(input_color_list[input$agriinput])),
+                   na.color = NA,
+                   alpha.regions = 1,
+                   maxpixels =  9331200,
+                   map.types = "Esri.WorldGrayCanvas",
+                   query.digits = 1,
+                   query.prefix = "") 
+    
+    map@map %>%
+      setView(lng=30, lat=50, zoom =2)
+    
+  })
+  
+  output$inputtile <- renderPlotly({
+    
+    input_means <- input_map_data() %>%
+      dplyr::select(bin, agri = input$agriinput) %>%
+      group_by(bin) %>%
+      summarise(across(agri, mean))
+    
+    input_means$ones <- rep((rep(seq(1, 5, by= 1), 5)), 1)
+    input_means$tens <- rep((rep(seq(00, 20, by = 5), each= 5)), 1)
+    
+    input_tile <- input_means %>%
+      ggplot(aes(ones, tens, text = paste0("bin ",bin))) +
+      geom_tile(aes(fill = agri)) + 
+      geom_text(aes(label = round(agri, 1)))+
+      xlab(paste("precipitation \u2192"))+
+      ylab(paste("temperature \u2192")) +
+      scale_fill_gradient(low = "#F9E1C3", high = unlist(input_color_list[input$agriinput]),
+                          name = paste0(input$agriinput, "\n", unlist(input_unit_list[input$agriinput])))+
+      theme(axis.text.x = element_text(angle=90))+
+      theme_classic()+
+      theme(axis.line.x = element_blank(),
+            axis.line.y = element_blank(),
+            axis.ticks = element_blank(),
+            axis.text = element_blank(),
+            strip.background = element_blank())
+    
+    ggplotly(input_tile, tooltip = "text")
+    
+  })
+
   
   ###### load crop scenarios for scatterplot ######
   plot_data <- reactive({
@@ -545,9 +773,9 @@ server <- function(input, output) {
                                "nitrogen shock", "phosphorus shock",
                                "potassium shock", "machinery shock",
                                "pesticide shock", "fertilizer shock", 
-                               "shock in all inputs", "bin", "nitrogen fertilizer", 
-                               "phosphorus fertilizer",
-                               "potassium fertilizer", 
+                               "shock in all inputs", "bin", "nitrogen", 
+                               "phosphorus",
+                               "potassium", 
                                "machinery", "pesticides", "irrigation")
     as.data.frame(crop_scenarios)
   })
@@ -560,7 +788,8 @@ server <- function(input, output) {
       dplyr::select(shock = input$shock, scenario_percent, input_rate = input$agri, observed_normal_yield, bin) %>%
       ggplot(aes(x = observed_normal_yield, y = shock))+
       geom_jitter(aes(color = input_rate), alpha = 0.5)+
-      scale_color_viridis(name = paste0(input$agri, " kg/ha"), option = "magma", direction = -1)+
+      scale_color_gradient(name = paste0(input$agri, "\nkg/ha"), low = "#F9E1C3", high = unlist(input_color_list[input$agri]))+
+      #scale_color_viridis(name = paste0(input$agri, "\nkg/ha"), option = "magma", direction = -1)+
       theme_classic()+
       labs(x = "original yield t/ha", y = "yield after shock t/ha", title = input$shock)+
       theme(strip.background = element_blank())+
@@ -623,7 +852,8 @@ server <- function(input, output) {
                                                          "shock_fert_only", "shock_all"),
                         to = c("N-rate shock", "P-rate shock", "K-rate shock", "machinery shock",
                                "pesticide shock", "fertilizer shock", "all inputs shock")))%>%
-          ggplot(aes(ones, tens)) +
+          ggplot(aes(ones, tens, text = paste0("bin: ", bin, "\n% of bin area: ",
+                                               round(percent, 2)))) +
           geom_text(aes(label = bin), size = 2)+
           geom_tile(aes(fill = count)) + 
           xlab(paste("precipitation \u2192"))+
@@ -651,7 +881,8 @@ server <- function(input, output) {
         
         tile_plot <- count_pivot %>%
           dplyr::filter(scenario_percent == input$tilescenario)%>%
-          ggplot(aes(as.numeric(bin), shock))+
+          ggplot(aes(as.numeric(bin), shock, text = paste0("bin: ", bin, "\n% of bin area: ",
+                                                           round(percent, 2))))+
           geom_tile(aes(fill = percent))+
           scale_fill_scico(name = "% of bin area", palette = "batlow", direction = 1, limits = c(0, 100))+
           scale_y_discrete("",limits = unique(count_pivot$shock), 
@@ -708,12 +939,13 @@ server <- function(input, output) {
                                                          "shock_fert_only", "shock_all"),
                         to = c("N-rate shock", "P-rate shock", "K-rate shock", "machinery shock",
                                "pesticide shock", "fertilizer shock", "all inputs shock")))%>%
-          ggplot(aes(ones, tens)) +
+          ggplot(aes(ones, tens, text = paste0("bin: ", bin, "\naverage decline: ",
+                                               round(decline, 2)))) +
           geom_text(aes(label = bin), size = 2)+
           geom_tile(aes(fill = decline)) + 
           xlab(paste("precipitation \u2192"))+
           ylab(paste("temperature \u2192")) +
-          scale_fill_scico(name = "average yield decline < -10%", palette = "batlow", direction = -1, limits = c(-50, -10), oob = squish)+
+          scale_fill_scico(name = "average yield\ndecline < -10%", palette = "batlow", direction = -1, limits = c(-50, -10), oob = squish)+
           ggtitle(paste0(input$tilecrop, ", mean yield decline of bin cells where yield decline was more than 10%")) +
           theme(axis.text.x = element_text(angle=90))+
           theme_classic()+
@@ -735,10 +967,10 @@ server <- function(input, output) {
           pivot_longer(c(3:9), names_to = "shock", values_to = "decline")
         
         tile_plot <- depth_pivot %>%
-          ggplot(aes(as.numeric(bin), shock)) +
+          ggplot(aes(as.numeric(bin), shock, text = paste0("bin: ", bin, "\naverage decline: ",
+                                                           round(decline, 2)))) +
           geom_tile(aes(fill = decline))+
-          scale_fill_scico(name = "average yield decline < -10%", palette = "batlow", direction = -1, limits = c(-50, -10), oob = squish)+
-          #scale_fill_viridis(name = "% area of bin", option = "plasma", direction = -1, limits = c(0, 100))+
+          scale_fill_scico(name = "average yield\ndecline < -10%", palette = "batlow", direction = -1, limits = c(-50, -10), oob = squish)+
           scale_y_discrete("",limits = unique(depth_pivot$shock), 
                            labels = c("N shock", "P shock", "K shock", "machinery shock",
                                       "pesticide shock", "fertilizer shock", "shock all"))+
@@ -751,7 +983,7 @@ server <- function(input, output) {
             strip.background = element_blank())#+
           #facet_wrap(~scenario_percent, nrow = 1, labeller = labeller(scenario_percent = scenario_labs))
       
-        ggplotly(tile_plot)
+        ggplotly(tile_plot, tooltip = "text")
         
         }
     }
@@ -760,6 +992,7 @@ server <- function(input, output) {
   
   ###### Maps ######
   
+
   #load data
   scenario_map_data <- reactive({
     file_name <- paste0("data/", input$crop, "_scenario_summary.RData")
@@ -779,45 +1012,29 @@ server <- function(input, output) {
   map_raster <- reactive({
     
     map_raster <- make_shock_raster_shiny(scenario_map_data(), input$mapshock, input$mapscenario)
-    
+    names(map_raster) <- "yield decrease"
+    map_raster
 
   })
   
-  pal_map <- colorNumeric("magma", domain = c(-100, 0), reverse = FALSE, na.color = NA)
-  
   
   #render output
-  # output$scenariomap <- 
-  #   
-  #   renderLeaflet({
-  # 
-  #     leaflet() %>%
-  #       addTiles() %>%
-  #       addRasterImage(map_raster(), colors = pal_map, maxBytes = 1000000000) %>%
-  #       addLegend(pal = pal_map, values = c(-100, 0), title = "yield decrease %") %>%
-  #       setView(lng=30, lat=50, zoom =2)
-    
-      #tmap method (does not work)
-    #renderTmap({
-  # 
-    # map <- tm_shape(map_raster()) +
-    #     tm_raster(style = "cont" , # draw gradient instead of classified
-    #               palette = scenario_pal,
-    #               colorNA = "white",
-    #               breaks = seq(-100, 0, 25),
-    #               legend.reverse = FALSE
-    #               ) +
-    #     # tm_shape(World) +
-    #     # tm_borders(col = "grey") +
-    #     tm_view(alpha = 1, set.view = c(30,50,2))
-    # 
-    # tmap_leaflet(map)
-      
-      # map <- mapview(map_raster(), maxpixels = 9331200)
-      # 
-      # map@map
-
-   # })
+   output$scenariomap <- renderLeaflet({
+     
+     map <- mapview(map_raster(),
+             use.layer.names = TRUE,
+             col.regions = viridis(n = 5, option = "magma", direction = 1),
+             na.color = NA,
+             alpha.regions = 1,
+             maxpixels =  9331200,
+             map.types = "Esri.WorldGrayCanvas",
+             query.digits = 1,
+             query.prefix = "%") 
+     
+     map@map %>%
+       setView(lng=30, lat=50, zoom =2)
+ 
+    })
   
   
   ###### Production plots ######
@@ -834,7 +1051,9 @@ server <- function(input, output) {
                     to = c("N-rate shock", "P-rate shock", "K-rate shock", "machinery shock",
                            "pesticide shock", "fertilizer shock", "all inputs shock")))%>%
       dplyr::mutate(production_decrease = ifelse(production_decrease > 0, NA, production_decrease))%>%
-      ggplot(aes(x = shock, y = production_decrease, alpha = scenario_percent, fill = shock))+ #
+      ggplot(aes(x = shock, y = production_decrease, alpha = scenario_percent, fill = shock,
+                 text = paste0("shock: ", shock, "\nproduction decrease: ", round(production_decrease,2),
+                               "%\nshock severity: ", scenario_percent, "%")))+ #
       geom_bar(position= position_stack(reverse = T), stat = "identity")+
       #coord_cartesian(ylim= c(-0.5, 35))+
       scale_y_continuous(name = "production decrease after shock %")+
@@ -853,68 +1072,58 @@ server <- function(input, output) {
       facet_wrap(~crop, nrow = 3)+
       guides(alpha = guide_legend(order = 2), fill = guide_legend(order = 1))
     
-    ggplotly(production_plot)
+    ggplotly(production_plot, tooltip = c("text"))
     
   })
   
   
-  # output$productionraster <- renderLeaflet({
-  # 
-  #   prod_change_raster <- raster(paste0("data/prod_change_raster.tif"))
-  #   #prod_change_raster <- prod_change_raster * (-1)
-  #   
-  #   # map <- mapview(prod_change_raster, maxpixels =  9331200)
-  #   # 
-  #   # map@map
-  #   
-  #   leaflet() %>%
-  #     addTiles() %>%
-  #     addRasterImage(prod_change_raster, colors = pal_map, maxBytes = 1000000000) %>%
-  #     addLegend(pal = pal_map, values = c(-100, 0), title = "yield decrease %") %>%
-  #     setView(lng=30, lat=50, zoom =2)
-  # 
-  #   # tm_shape(prod_change_raster) +
-  #   #   tm_raster(style = "cont" , # draw gradient instead of classified
-  #   #             palette = scenario_pal,
-  #   #             colorNA = "white",
-  #   #             breaks = seq(0, 100, 25),
-  #   #             legend.reverse = FALSE,
-  #   #             ) +
-  #   #   tm_shape(World) +
-  #   #   tm_borders(col = "grey") +
-  #   #   tm_view(alpha = 1, set.view = c(30,50,2),
-  #   #           leaflet.options = ctrl_list,
-  #   #           view.legend.position = NA)
-  # 
-  # })
+   output$productionraster <- renderLeaflet({
+     
+     names(prod_change_raster) <- "total.yield.decrease"
+     prod_change_raster[prod_change_raster > 0] <- 0    
   
-  # output$productioncountries <- renderTmap({
-  #   
-  #   tm_shape(World_sp)+
-  #     tm_polygons("prod_change",
-  #                 style="cont",
-  #                 palette = viridis(n = 5, option = "magma", direction = -1),
-  #                 breaks = seq(-75, 0, 25),
-  #                 legend.reverse = FALSE,
-  #                 title = "decrease %")+
-  #     tm_view(set.view = c(30,50,2))
-  #     # tm_layout(main.title = "Change in production in all 12 crops after 50% shock in all inputs",
-  #     #           main.title.size = 1,
-  #     #           bg.color = "white",
-  #     #           legend.show = TRUE,
-  #     #           legend.outside = TRUE,
-  #     #           #legend.outside.position = c("left", "bottom"),
-  #     #           earth.boundary = c(-180, 180, -90, 90),
-  #     #           earth.boundary.color = "gray",
-  #     #           frame = FALSE)
-  # })
+     map <- mapview(prod_change_raster,
+                    use.layer.names = TRUE,
+                    col.regions = viridis(n = 5, option = "magma", direction = 1),
+                    na.color = NA,
+                    alpha.regions = 1,
+                    maxpixels =  9331200,
+                    map.types = "Esri.WorldGrayCanvas",
+                    query.digits = 1,
+                    query.prefix = "%") 
+     
+     map@map %>%
+       setView(lng=30, lat=50, zoom =2)
+  
+   })
+  
+  output$productioncountries <- renderTmap({
+
+    tm_shape(World_sp)+
+      tm_polygons("prod_change",
+                  style="cont",
+                  palette = viridis(n = 5, option = "magma", direction = -1),
+                  breaks = seq(-75, 0, 25),
+                  legend.reverse = FALSE,
+                  title = "decrease %")+
+      tm_view(set.view = c(30,50,2))
+      # tm_layout(main.title = "Change in production in all 12 crops after 50% shock in all inputs",
+      #           main.title.size = 1,
+      #           bg.color = "white",
+      #           legend.show = TRUE,
+      #           legend.outside = TRUE,
+      #           #legend.outside.position = c("left", "bottom"),
+      #           earth.boundary = c(-180, 180, -90, 90),
+      #           earth.boundary.color = "gray",
+      #           frame = FALSE)
+  })
   
 
   ###### Performance plots ######
   
   # NSE plot, data loaded already
   
-  output$NSE <- renderPlotly({
+  output$NSE <- renderPlot({
 
     NSE_total_df$ones <- rep((rep(seq(1, 5, by= 1), 5)), 1)
     NSE_total_df$tens <- rep((rep(seq(00, 20, by = 5), each= 5)), 1)
@@ -939,8 +1148,10 @@ server <- function(input, output) {
             axis.text = element_blank(),
             strip.background = element_blank()) +
       facet_wrap(~crop, nrow = 3)
+    
+    NSE_plot
 
-    ggplotly(NSE_plot)
+    #ggplotly(NSE_plot)
 
   })
   
