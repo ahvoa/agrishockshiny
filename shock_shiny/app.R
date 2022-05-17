@@ -59,8 +59,8 @@ pal_map <- colorNumeric("magma", domain = c(-100, 0), reverse = FALSE, na.color 
 input_color_list <- list("nitrogen" = "#326286",
                          "phosphorus" =  "#CF5422",
                          "potassium" =  "#FD6467",
-                         "machinery" =  "#4E2E74",
-                         "pesticides" =  "#5B1A18",
+                         "machinery" =  "#5B1A18",
+                         "pesticides" = "#4E2E74",
                          "crop yield" =  "#157567")
 
 input_unit_list <- list("nitrogen" = "kg/ha",
@@ -352,28 +352,27 @@ ui <- pagePiling(center = FALSE,
         pageSection(menu = "inputs",
               fluidRow(
                 br(),
-                column(4,
-                  column(3),
-                  column(9,
+                column(6,
+                  column(2),
+                  column(10,
                          h4("Visualize crop yields and agricultural inputs in maps 
                                 and as averages in each climate bin."))),
-                column(3,
-                       column(2),
-                       column(10,
+                column(2, offset = 1,
+                       
+                       column(12,
                        selectInput("inputcrop", "Select crop",
                                    choices = crop_list,
                                    selected = "barley"))),
-                column(3,
-                    column(2),
-                    column(10,
-                       selectInput("agriinput", "Select agricultural input",
+                column(2,
+                    column(12,
+                       selectInput("agriinput", "Select data to display",
                                    choices = c("crop yield", 
                                                "nitrogen", 
                                                "phosphorus",
                                                "potassium", 
                                                "machinery",
                                                "pesticides"),
-                                   selected = "nitrogen")))
+                                   selected = "crop yield")))
             
                 ),
               fluidRow(
@@ -399,18 +398,17 @@ ui <- pagePiling(center = FALSE,
                     column(8,
                       column(1),
                       column(11,
-                        tags$p(" Random forest is a machine learning method. 
+                        h4(" Random forest is a machine learning method. 
                            It builds hundreds of decision
                            trees or regression trees and then the model
                            output is an average of all the trees.
                            "),
-                        tags$p("We built a model with the random forest algoritm and global data of
+                        h4("We built a model with the random forest algoritm and global data of
                                crop yields, nitrogen fertilizer, phosphorus fertilizer, 
                                potassium fertilizer, agricultural machinery, and pesticides. 
                                Then we used that model to predict how decreases or shocks in different 
                                agricultural inputs would affect yields."))),
                     column(3, img(src = "make_model.png", width = "100%"))),
-         br(),
          hr(),
          br(),
 
@@ -419,11 +417,12 @@ ui <- pagePiling(center = FALSE,
                 column(5,
                        img(src = "use_model.png", width = "100%")),
                 column(4, offset = 1,
-                       tags$p("To model agricultural input shock scenarios, new data 
+                       h4("To model agricultural input shock scenarios, new data 
                        was created with a decrease of", strong("25%, 50% or 75%"), "in either:",
-                      strong("nitrogen\n"), strong("phosphorus\n"), 
-                      strong("potassium\n"), strong("machinery\n"),
-                      strong("pesticides\n"),
+                      strong("nitrogen, "), strong("phosphorus, "), 
+                      strong("potassium, "), strong("machinery,", "or",),
+                      strong("pesticides,"), "or in ", strong("all fertilizers"), "or in ",
+                      strong("all inputs"), "togehter.",
                       "See results in the following pages!"),
                       
                     ))),
@@ -438,7 +437,7 @@ ui <- pagePiling(center = FALSE,
                         column(1),
                         column(11,
                           h4("Draw maps from different angricultural input shock scenarios"),
-                          
+                          br(),
                           selectInput("mapcrop", "Select crop:",
                                       choices = crop_list,
                                       selected = "barley"),
@@ -463,7 +462,9 @@ ui <- pagePiling(center = FALSE,
                    column(9,
                         column(10,
                           h4(textOutput("maptitle")),
-                          leafletOutput("scenariomap")),
+                          leafletOutput("scenariomap"),
+                          helpText("Yield decrease in % from the original yield. 
+                                   The map only shows yield decreases and omits increases.")),
                         column(2))
                  )),
         
@@ -473,11 +474,10 @@ ui <- pagePiling(center = FALSE,
                       
                       column(3, align = "center",
                              br(),
-                             br(),
                           column(1),
                           column(11,
                              h4("Examine scenario shocks from tileplots"),
-                             
+                             br(),
                              selectInput("tilecrop", "Select crop",
                                          choices = crop_list,
                                          selected = "barley"),
@@ -508,12 +508,14 @@ ui <- pagePiling(center = FALSE,
                       )),
                       
                       column(9,
-                             column(11, plotlyOutput("tileplot"),
+                             column(11, 
+                                    br(),
+                                    plotlyOutput("tileplot"),
                                     helpText(strong("share:"),"each tile represents
                                            the share of the respective climate bin’s
                                              cells where yield decline after the shock
-                                             was greater than 10% from the original yield."),
-                                    helpText(strong("mean:"), "the colour of the tile
+                                             was greater than 10% from the original yield.",
+                                    (strong("mean:")), "the colour of the tile
                                              reflects the average yield decline of all 
                                              the cells where decline was greater than 10% of 
                                              the original yield (note the different colour scale).")),
@@ -532,7 +534,7 @@ ui <- pagePiling(center = FALSE,
                         column(1),
                         column(11,
                              h4("Examine shock scatterplots with different agricultural inputs."),
-                             
+                             br(),
                              
                              selectInput("crop", label = "Choose crop:",
                                          choices = c("barley", "cassava", "groundnut", "maize",
@@ -572,7 +574,10 @@ ui <- pagePiling(center = FALSE,
                       
                       
                       column(9,
-                          column(11, plotOutput("agriplot")),
+                          column(11, 
+                                 br(),
+                                 br(),
+                                 plotOutput("agriplot")),
                           column(1)) #buffer
                     ) #column ends
         ), #page ends
@@ -790,6 +795,7 @@ server <- function(input, output) {
                           name = paste0(input$agriinput, "\n", unlist(input_unit_list[input$agriinput])))+
       theme(axis.text.x = element_text(angle=90))+
       theme_classic()+
+      ggtitle(paste0("Average ", input$agriinput, " in each climate bin"))+
       theme(axis.line.x = element_blank(),
             axis.line.y = element_blank(),
             axis.ticks = element_blank(),
@@ -906,7 +912,7 @@ server <- function(input, output) {
                 strip.background = element_blank()) +
           facet_wrap(~shock, nrow = 2)
         
-        ggplotly(tile_plot)
+        ggplotly(tile_plot, tooltip = "text")
       
       } else {
   
@@ -933,7 +939,7 @@ server <- function(input, output) {
             strip.background = element_blank())#+
           #facet_wrap(~scenario_percent, nrow = 1, labeller = labeller(scenario_percent = scenario_labs))
       
-          ggplotly(tile_plot)
+          ggplotly(tile_plot, tooltip = "text")
         }  
     } else {
     
@@ -992,7 +998,7 @@ server <- function(input, output) {
                 strip.background = element_blank()) +
           facet_wrap(~shock, nrow = 2)
         
-        ggplotly(tile_plot)
+        ggplotly(tile_plot, tooltip = "text")
         
         
       } else {
