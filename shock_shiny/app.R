@@ -251,7 +251,7 @@ plot_all_ales <- function(ale_dataframe, crop, bin) {
 
 ##### UI #####
 # Define UI for application that draws 
-ui <- pagePiling(center = TRUE,
+ui <- pagePiling(center = FALSE,
                  sections.color = c("#F1BB7B",
                                     "white",
                                     "white",
@@ -277,8 +277,8 @@ ui <- pagePiling(center = TRUE,
         
         ###### Start tab ######         
         pageSection(menu = "intro", 
-                 h1("Agricultural input shocks"),
-                 h3("What we depend on to grow food and how"),
+                 h1(style = "text-align: center;", "Agricultural input shocks"),
+                 h3(style = "text-align: center;", "What we depend on to grow food and how"),
                  br(),
                  br(),
                  br(),
@@ -304,6 +304,8 @@ ui <- pagePiling(center = TRUE,
                   ),
               column(6,
                   column(11,
+                         br(),
+                         br(),
                          img(src = "inputs.png", width = "100%")),
                   column(1))
               
@@ -332,6 +334,11 @@ ui <- pagePiling(center = TRUE,
                               img(src = "climate_png.png", width = "100%"))),
                  
                   column(8,
+                         br(),
+                         br(),
+                         br(),
+                         h3(style = "text-align: center;", "Climate bins"),
+                         br(),
                          column(11, tmapOutput("climatebinmap")),
                          column(1))
                        
@@ -344,14 +351,19 @@ ui <- pagePiling(center = TRUE,
         ###### Inputs tab ######
         pageSection(menu = "inputs",
               fluidRow(
-                column(1),
+                br(),
                 column(4,
+                  column(3),
+                  column(9,
+                         h4("Visualize crop yields and agricultural inputs in maps 
+                                and as averages in each climate bin."))),
+                column(3,
                        column(2),
                        column(10,
                        selectInput("inputcrop", "Select crop",
                                    choices = crop_list,
                                    selected = "barley"))),
-                column(4,
+                column(3,
                     column(2),
                     column(10,
                        selectInput("agriinput", "Select agricultural input",
@@ -361,11 +373,11 @@ ui <- pagePiling(center = TRUE,
                                                "potassium", 
                                                "machinery",
                                                "pesticides"),
-                                   selected = "nitrogen"))),
+                                   selected = "nitrogen")))
             
-                column(2)),
+                ),
               fluidRow(
-                column(7,
+                column(6, offset = 1,
                        leafletOutput("inputmap")
                        ),
                 column(5,
@@ -379,33 +391,40 @@ ui <- pagePiling(center = TRUE,
 
         ###### Model tab ######
         pageSection(menu = "model",
-                h1("How did we do it?"),
+                h2(style = "text-align: center;","How did we model the effects
+                   of agricultural input shocks on crop yields?"),
                 br(),
                 
               fluidRow(
                     column(8,
                       column(1),
                       column(11,
-                        tags$p("machine learning method, random forest. 
-                           Random forest builds hundreds of decision
+                        tags$p(" Random forest is a machine learning method. 
+                           It builds hundreds of decision
                            trees or regression trees and then the model
                            output is an average of all the trees.
-                           "))),
+                           "),
+                        tags$p("We built a model with the random forest algoritm and global data of
+                               crop yields, nitrogen fertilizer, phosphorus fertilizer, 
+                               potassium fertilizer, agricultural machinery, and pesticides. 
+                               Then we used that model to predict how decreases or shocks in different 
+                               agricultural inputs would affect yields."))),
                     column(3, img(src = "make_model.png", width = "100%"))),
-              hr(),
-              br(),
-              fluidRow("Texttexttext"),
-              br(),
+         br(),
+         hr(),
+         br(),
 
               fluidRow(
                 column(1),
                 column(5,
                        img(src = "use_model.png", width = "100%")),
                 column(4, offset = 1,
-                       "New data was created with a decrease of 25%, 50% or 75% in either:",
-                      h5(strong("nitrogen")), h5(strong("phosphorus")), 
-                      h5(strong("potassium")), h5(strong("machinery")),
-                      h5(strong("pesticides"))
+                       tags$p("To model agricultural input shock scenarios, new data 
+                       was created with a decrease of", strong("25%, 50% or 75%"), "in either:",
+                      strong("nitrogen\n"), strong("phosphorus\n"), 
+                      strong("potassium\n"), strong("machinery\n"),
+                      strong("pesticides\n"),
+                      "See results in the following pages!"),
                       
                     ))),
                     
@@ -415,10 +434,10 @@ ui <- pagePiling(center = TRUE,
         pageSection(menu = "maps",
                  fluidRow(
                    
-                   column(3,
+                   column(3, align = "center",
                         column(1),
                         column(11,
-                          helpText("Draw maps from different angricultural input shock scenarios"),
+                          h4("Draw maps from different angricultural input shock scenarios"),
                           
                           selectInput("mapcrop", "Select crop:",
                                       choices = crop_list,
@@ -443,6 +462,7 @@ ui <- pagePiling(center = TRUE,
                    
                    column(9,
                         column(10,
+                          h4(textOutput("maptitle")),
                           leafletOutput("scenariomap")),
                         column(2))
                  )),
@@ -451,10 +471,12 @@ ui <- pagePiling(center = TRUE,
         pageSection(menu = "tiles",
                     fluidRow(
                       
-                      column(3,
+                      column(3, align = "center",
+                             br(),
+                             br(),
                           column(1),
                           column(11,
-                             helpText("Examine scenario shocks from tileplots"),
+                             h4("Examine scenario shocks from tileplots"),
                              
                              selectInput("tilecrop", "Select crop",
                                          choices = crop_list,
@@ -468,8 +490,8 @@ ui <- pagePiling(center = TRUE,
                                           outline = FALSE,
                                           animation = "smooth"),
                              
-                             prettyRadioButtons("tilecount", "Select to see either share of cells where yield decline was > 10% (share),
-                            or the mean decline in the cells where yield decline was > 10% (mean)",
+                             prettyRadioButtons("tilecount", "Select to see either share of cells with yield decline (share),
+                            or the mean decline in them (mean)",
                                           choices = c("share", "mean"),
                                           selected = "share",
                                           status = "warning",
@@ -486,7 +508,15 @@ ui <- pagePiling(center = TRUE,
                       )),
                       
                       column(9,
-                             column(11, plotlyOutput("tileplot")),
+                             column(11, plotlyOutput("tileplot"),
+                                    helpText(strong("share:"),"each tile represents
+                                           the share of the respective climate bin’s
+                                             cells where yield decline after the shock
+                                             was greater than 10% from the original yield."),
+                                    helpText(strong("mean:"), "the colour of the tile
+                                             reflects the average yield decline of all 
+                                             the cells where decline was greater than 10% of 
+                                             the original yield (note the different colour scale).")),
                              column(1))
                     )
                     
@@ -501,7 +531,7 @@ ui <- pagePiling(center = TRUE,
                       column(3,
                         column(1),
                         column(11,
-                             helpText("Examine shock scatterplots with different agricultural inputs."),
+                             h4("Examine shock scatterplots with different agricultural inputs."),
                              
                              
                              selectInput("crop", label = "Choose crop:",
@@ -566,7 +596,7 @@ ui <- pagePiling(center = TRUE,
                                    tags$p("The effects of agricultural input shocks 
                                           can also be examined through production, or total volume of cultivated crop."),
                                    
-                                   tags$p("Production is", strong("yield * harvested area"), ". In this barplot you can examine
+                                   tags$p("Production is", strong("yield * harvested area."), " In this barplot you can examine
                                           shock effects on the global production of different crops individually."),
                                    tags$p("In the tabs ", tags$i("All crops"),
                                           "you can see the effects on all 12 crops summed together.
@@ -576,11 +606,11 @@ ui <- pagePiling(center = TRUE,
                                   plotlyOutput("productionbars"))),    
                       
                         tabPanel("All crops",
-                                 h5("Change in production for all 12 crops after 50% shock in all inputs"),
+                                 h5(style = "text-align: center;", "Change in production for all 12 crops after 50% shock in all inputs"),
                                   tmapOutput("productionraster")),
                       
                         tabPanel("All countries",
-                                 h5("Countrywise change in the total production of all 12 crops after 50% shock in all inputs"),
+                                 h5(style = "text-align: center;", "Countrywise change in the total production of all 12 crops after 50% shock in all inputs"),
                                   tmapOutput("productioncountries"))
                       
                    )),
@@ -590,6 +620,8 @@ ui <- pagePiling(center = TRUE,
         
         ###### Performance ######
         pageSection(menu = "performance",
+            column(1),
+            column(11,
                     
               tabsetPanel(
                 tabPanel("NSE-scores",
@@ -606,6 +638,7 @@ ui <- pagePiling(center = TRUE,
                                       acceptable. Models with NSE > 0.65 are good and NSE > 0.75 are very good."))),
                        column(9,
                           column(11,
+                                 br(),
                             plotOutput("NSE")),
                           column(1)))),
                 
@@ -621,7 +654,6 @@ ui <- pagePiling(center = TRUE,
                                        with external data ", tags$strong("(test)"), ". If the RMSE-scores are not significantly 
                                       different between train and test, the model does not overfit."),
                                br(),
-                               br(),
                          selectInput("RMSE", label = "Select crop",
                                      choices = crop_list,
                                      selected = "barley"))),
@@ -635,6 +667,8 @@ ui <- pagePiling(center = TRUE,
                       column(4,
                         column(1),
                         column(11,
+                               br(),
+                               br(),
                                tags$p("Model behaviour can be measured with ALE or ",
                                       tags$i("Accumulated Local Effects."), 
                                              "The ALE score is the parameter effect in relation to the average of the model."),
@@ -648,17 +682,19 @@ ui <- pagePiling(center = TRUE,
                                        value = FALSE,
                                        status = "warning",
                                        fill = TRUE,
-                                       animation = "smooth"),
-                         img(src = "climate_png.png", width = "100%")
+                                       animation = "smooth")
+                         #img(src = "climate_png.png", width = "100%")
                          
                          )),
                       
                       column(8,
                         column(11,
+                               br(),
+                               br(),
                              plotOutput("aleplot")),
                         column(1))))
               )
-                 ))
+                 )))
 
 
 
@@ -995,7 +1031,7 @@ server <- function(input, output) {
 
   #load data
   scenario_map_data <- reactive({
-    file_name <- paste0("data/", input$crop, "_scenario_summary.RData")
+    file_name <- paste0("data/", input$mapcrop, "_scenario_summary.RData")
     get(load(file_name))
     colnames(crop_scenarios) <- c("cell", "scenario_percent", "x", "y", "observed_normal_yield",
                                   "nitrogen shock", "phosphorus shock",
@@ -1017,6 +1053,10 @@ server <- function(input, output) {
 
   })
   
+  output$maptitle <- renderText({
+    title <- paste0(input$mapcrop, ", a ", input$mapscenario, "% ", input$mapshock)
+    
+  })
   
   #render output
    output$scenariomap <- renderLeaflet({
