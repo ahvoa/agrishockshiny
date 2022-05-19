@@ -534,17 +534,12 @@ ui <- pagePiling(center = FALSE,
                         column(1),
                         column(11,
                              h4("Examine shock scatterplots with different agricultural inputs."),
-                             br(),
                              
                              selectInput("crop", label = "Choose crop:",
                                          choices = c("barley", "cassava", "groundnut", "maize",
                                                      "millet", "potato", "rice", "sorghum",
                                                      "soybean", "sugarbeet", "sugarcane", "wheat"),
                                          selected = "barley"),
-                             
-                             sliderInput("bin", 
-                                         label = "Choose climate bin:",
-                                         min = 1, max = 25, value = 10),
                              
                              selectInput("shock", label = "Choose shock type:",
                                          choices = c("nitrogen shock", "phosphorus shock",
@@ -562,6 +557,10 @@ ui <- pagePiling(center = FALSE,
                                                      "machinery",
                                                      "pesticides"),
                                          selected = "nitrogen"),
+                             
+                             sliderInput("bin", 
+                                         label = "Choose climate bin:",
+                                         min = 1, max = 25, value = 10),
                              
                              prettyCheckbox("abline",
                                            label = "Show 1:1 line",
@@ -653,15 +652,16 @@ ui <- pagePiling(center = FALSE,
                         column(1),
                         column(11,
                                br(),
+                               selectInput("RMSE", label = "Select crop",
+                                           choices = crop_list,
+                                           selected = "barley"),
                                br(),
                                tags$p("RMSE or ", tags$i("Root Mean Square Error"), " is another measure of model performance.
                                       Here we see RMSE-values calculated from when training the model ", tags$strong("(train)"), "and then again when testing
-                                       with external data ", tags$strong("(test)"), ". If the RMSE-scores are not significantly 
+                                       with external data ", tags$strong("(test)."), " If the RMSE-scores are not significantly 
                                       different between train and test, the model does not overfit."),
-                               br(),
-                         selectInput("RMSE", label = "Select crop",
-                                     choices = crop_list,
-                                     selected = "barley"))),
+                              
+                         )),
                       column(9,
                           column(11,
                              plotOutput("RMSE")),
@@ -786,7 +786,7 @@ server <- function(input, output) {
     input_means$tens <- rep((rep(seq(00, 20, by = 5), each= 5)), 1)
     
     input_tile <- input_means %>%
-      ggplot(aes(ones, tens, text = paste0("bin ",bin))) +
+      ggplot(aes(ones, tens, text = paste0("bin ", bin))) +
       geom_tile(aes(fill = agri)) + 
       geom_text(aes(label = round(agri, 1)))+
       xlab(paste("precipitation \u2192"))+
@@ -833,7 +833,7 @@ server <- function(input, output) {
       scale_color_gradient(name = paste0(input$agri, "\nkg/ha"), low = "#F9E1C3", high = unlist(input_color_list[input$agri]))+
       #scale_color_viridis(name = paste0(input$agri, "\nkg/ha"), option = "magma", direction = -1)+
       theme_classic()+
-      labs(x = "original yield t/ha", y = "yield after shock t/ha", title = input$shock)+
+      labs(x = "original yield t/ha", y = "yield after shock t/ha", title = paste0(input$shock, ", ", input$crop, " climate bin ", input$bin))+
       theme(strip.background = element_blank())+
       facet_wrap(~scenario_percent, labeller = labeller(scenario_percent = scenario_labs))
     
@@ -895,7 +895,7 @@ server <- function(input, output) {
                         to = c("N-rate shock", "P-rate shock", "K-rate shock", "machinery shock",
                                "pesticide shock", "fertilizer shock", "all inputs shock")))%>%
           ggplot(aes(ones, tens, text = paste0("bin: ", bin, "\n% of bin area: ",
-                                               round(percent, 2)))) +
+                                               round(count, 2)))) +
           geom_text(aes(label = bin), size = 2)+
           geom_tile(aes(fill = count)) + 
           xlab(paste("precipitation \u2192"))+
