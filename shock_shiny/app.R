@@ -9,7 +9,7 @@
 for (package in c("shiny", "ggplot2", "viridis", "plotly", "shinyWidgets",
                   "tmap", "tmaptools", "terra", "sf", "leaflet", "raster",
                   "scico", "dplyr", "tidyr", "scales", "wesanderson", "mapview",
-                  "fullPage")) {
+                  "fullPage", "gridExtra")) {
   if (!require(package, character.only=TRUE, quietly=TRUE)) {
     install.packages(package)
   }
@@ -187,7 +187,7 @@ plot_one_loess_ale <- function(ale_dataframe, min, max, input_name_from_list, un
 }
 
 
-plot_all_loess_ales <- function(ale_dataframe) {
+plot_all_loess_ales <- function(ale_dataframe, crop) {
   y_max <- max(ale_dataframe$ale_value)
   y_min <- min(ale_dataframe$ale_value)
   
@@ -204,7 +204,7 @@ plot_all_loess_ales <- function(ale_dataframe) {
     plot_list[[x]] <- plot_one_loess_ale(ale_dataframe, y_min, y_max, input_list[x], unit_list[x])
   }
   
-  grid.arrange(grobs = plot_list, nrow = 2, bottom=grid::textGrob("input"), left=grid::textGrob("ALE-score", rot = 90), top=grid::textGrob(paste0(crop_list[i])))
+  grid.arrange(grobs = plot_list, nrow = 2, bottom=grid::textGrob("input"), left=grid::textGrob("ALE-score", rot = 90), top=grid::textGrob(paste0(crop, " ALEs for all bins")))
   
 }
 
@@ -670,8 +670,7 @@ ui <- pagePiling(center = FALSE,
                 tabPanel("ALE-plots",
                     fluidRow(
                       column(4,
-                        column(1),
-                        column(11,
+                        column(12,
                                br(),
                                br(),
                                tags$p("Model behaviour can be measured with ALE or ",
