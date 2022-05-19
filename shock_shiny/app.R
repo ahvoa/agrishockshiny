@@ -43,7 +43,6 @@ rob_crs <- "+proj=robin +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +units=m"
 #change projection on raster and World vector
 data("World")
 World_geo <- World$geometry
-World_rob <- st_transform(World, rob_crs)
 tmap_options(max.raster = c(plot = 1e9, view = 1e9))
 ctrl_list <- list(attributionControl = FALSE,
                   zoomDelta = 0.5)
