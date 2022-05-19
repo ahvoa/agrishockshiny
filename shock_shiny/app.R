@@ -74,8 +74,6 @@ get(load("data/prod_change_bardata.RData"))
 get(load("data/prod_change_countries.RData"))
 get(load("data/NSE_data.RData"))
 
-prod_change_raster <- raster(paste0(path_to_data, "results_final/prod_change_raster_norm.tif"))
-
 make_shock_raster_shiny <- function(crop_scenarios, shock_column, scenario_number) {
   
   #select data for raster, make columns of scenario percents
