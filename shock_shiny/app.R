@@ -75,6 +75,8 @@ get(load("data/prod_change_countries.RData"))
 get(load("data/NSE_data.RData"))
 
 prod_change_raster <- raster("data/prod_change_raster.tif")
+earthstat_file <- "data/barley_YieldPerHectare.tif"
+
 
 make_shock_raster_shiny <- function(crop_scenarios, shock_column, scenario_number) {
   
@@ -90,8 +92,7 @@ make_shock_raster_shiny <- function(crop_scenarios, shock_column, scenario_numbe
   raster_data$shock_value <- round(raster_data$shock_value)
   
   #get a raster file to input shock values to
-  earthstat_file <- list.files(path = "data/",
-                               recursive = TRUE, pattern = paste0(crop_list[1], "_YieldPerHectare.tif"), full.names = TRUE)
+  
   yield_raster <- rast(earthstat_file)
   
   #substitute all values of the raster
@@ -142,8 +143,8 @@ make_input_raster_shiny <- function(crop_scenarios, shock_column, scenario_numbe
   #raster_data$shock_value <- round(raster_data$shock)
   
   #get a raster file to input shock values to
-  earthstat_file <- list.files(path = "data/",
-                               recursive = TRUE, pattern = paste0(crop_list[1], "_YieldPerHectare.tif"), full.names = TRUE)
+  # earthstat_file <- list.files(path = "data/",
+  #                              recursive = TRUE, pattern = paste0(crop_list[1], "_YieldPerHectare.tif"), full.names = TRUE)
   yield_raster <- rast(earthstat_file)
   
   #substitute all values of the raster
