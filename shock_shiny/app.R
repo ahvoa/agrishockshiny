@@ -74,6 +74,8 @@ get(load("data/prod_change_bardata.RData"))
 get(load("data/prod_change_countries.RData"))
 get(load("data/NSE_data.RData"))
 
+prod_change_raster <- raster("data/prod_change_raster.tif")
+
 make_shock_raster_shiny <- function(crop_scenarios, shock_column, scenario_number) {
   
   #select data for raster, make columns of scenario percents
@@ -88,7 +90,7 @@ make_shock_raster_shiny <- function(crop_scenarios, shock_column, scenario_numbe
   raster_data$shock_value <- round(raster_data$shock_value)
   
   #get a raster file to input shock values to
-  earthstat_file <- list.files(path = "C:/Users/ahvoa1/data/EarthStat/",
+  earthstat_file <- list.files(path = "data/",
                                recursive = TRUE, pattern = paste0(crop_list[1], "_YieldPerHectare.tif"), full.names = TRUE)
   yield_raster <- rast(earthstat_file)
   
@@ -140,7 +142,7 @@ make_input_raster_shiny <- function(crop_scenarios, shock_column, scenario_numbe
   #raster_data$shock_value <- round(raster_data$shock)
   
   #get a raster file to input shock values to
-  earthstat_file <- list.files(path = "C:/Users/ahvoa1/data/EarthStat/",
+  earthstat_file <- list.files(path = "data/",
                                recursive = TRUE, pattern = paste0(crop_list[1], "_YieldPerHectare.tif"), full.names = TRUE)
   yield_raster <- rast(earthstat_file)
   
@@ -1231,7 +1233,7 @@ server <- function(input, output) {
   ###### ALE-plots ######
   
   ALE_data <- reactive({
-    file_name <- paste0("data/ALES/", input$ALE, "_ALEs.RData")
+    file_name <- paste0("data/ALEs/", input$ALE, "_ALEs.RData")
     get(load(file_name))
     
   })
@@ -1249,7 +1251,7 @@ server <- function(input, output) {
     
     if (input$wholecropALE) {
     
-      plot_all_loess_ales(ALE_data())
+      plot_all_loess_ales(ALE_data(), input$ALE)
       
     } else {
       
