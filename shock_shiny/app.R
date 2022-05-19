@@ -109,8 +109,8 @@ make_shock_raster_shiny <- function(crop_scenarios, shock_column, scenario_numbe
   
   #create raster
   shock_raster <- rasterFromXYZ(raster_data_with_all_cells, res = c(0.08333333, 0.08333333), crs = "+proj=longlat +datum=WGS84", digits = 6)
-  #shock_raster <- rast(shock_raster)
-  
+  st_crs(shock_raster) <- 4326
+    
   # #create a vector of shock values
   # shock_vec <- na.omit(c(as.matrix(shock_raster)))
   # 
@@ -161,7 +161,7 @@ make_input_raster_shiny <- function(crop_scenarios, shock_column, scenario_numbe
   
   #create raster
   shock_raster <- rasterFromXYZ(raster_data_with_all_cells, res = c(0.08333333, 0.08333333), crs = "+proj=longlat +datum=WGS84", digits = 6)
-  #shock_raster <- rast(shock_raster)
+  st_crs(shock_raster) <- 4326
   
   return(shock_raster)
   
