@@ -46,6 +46,7 @@ World_geo <- World$geometry
 tmap_options(max.raster = c(plot = 1e9, view = 1e9))
 ctrl_list <- list(attributionControl = FALSE,
                   zoomDelta = 0.5)
+mapviewOptions(fgb = TRUE)
 names(scenario_labs) <- c(25, 50, 75)
 pal_bivariate <- c("#d3d3d3", "#b6cdcd", "#97c5c5", "#75bebe", "#52b6b6",
                    "#d6c1a6", "#b8bba1", "#99b49c", "#77ae96", "#53a690",
@@ -110,7 +111,7 @@ make_shock_raster_shiny <- function(crop_scenarios, shock_column, scenario_numbe
   
   #create raster
   shock_raster <- rasterFromXYZ(raster_data_with_all_cells, res = c(0.08333333, 0.08333333), crs = "+proj=longlat +datum=WGS84", digits = 6)
-  crs(shock_raster) <- "EPSG:2169"
+  #crs(shock_raster) <- "EPSG:2169"
     
   # #create a vector of shock values
   # shock_vec <- na.omit(c(as.matrix(shock_raster)))
