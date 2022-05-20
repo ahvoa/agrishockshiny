@@ -162,7 +162,7 @@ make_input_raster_shiny <- function(crop_scenarios, shock_column, scenario_numbe
   
   #create raster
   shock_raster <- rasterFromXYZ(raster_data_with_all_cells, res = c(0.08333333, 0.08333333), crs = "+proj=longlat +datum=WGS84", digits = 6)
-  crs(shock_raster) <- 4326
+  crs(shock_raster) <- "EPSG:4326"
   
   return(shock_raster)
   
