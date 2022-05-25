@@ -76,7 +76,6 @@ get(load("data/prod_change_countries.RData"))
 get(load("data/NSE_data.RData"))
 
 prod_change_raster <- raster("data/prod_change_raster.tif")
-crs(prod_change_raster) <- 4326
 earthstat_file <- "data/barley_YieldPerHectare.tif"
 
 
@@ -111,8 +110,7 @@ make_shock_raster_shiny <- function(crop_scenarios, shock_column, scenario_numbe
   
   #create raster
   shock_raster <- rasterFromXYZ(raster_data_with_all_cells, res = c(0.08333333, 0.08333333), crs = "+proj=longlat +datum=WGS84", digits = 6)
-  #crs(shock_raster) <- "EPSG:2169"
-    
+
   # #create a vector of shock values
   # shock_vec <- na.omit(c(as.matrix(shock_raster)))
   # 
@@ -163,8 +161,7 @@ make_input_raster_shiny <- function(crop_scenarios, shock_column, scenario_numbe
   
   #create raster
   shock_raster <- rasterFromXYZ(raster_data_with_all_cells, res = c(0.08333333, 0.08333333), crs = "+proj=longlat +datum=WGS84", digits = 6)
-  crs(shock_raster) <- "EPSG:2169"
-  
+
   return(shock_raster)
   
 }
