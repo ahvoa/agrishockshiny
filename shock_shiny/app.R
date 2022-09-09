@@ -713,7 +713,7 @@ server <- function(input, output) {
   bin_data <- reactive({
     raster_name <- paste0('data/', input$bincrop, "_binmatrix.tif")
     climate_bins <- raster(raster_name)
-    names(bin_data) <- "climatebin"
+    #names(bin_data) <- "climatebin"
   })
   
   
