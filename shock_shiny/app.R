@@ -9,7 +9,7 @@
 for (package in c("shiny", "ggplot2", "viridis", "plotly", "shinyWidgets",
                   "tmap", "tmaptools", "terra", "sf", "leaflet", "raster",
                   "scico", "dplyr", "tidyr", "scales", "wesanderson", "mapview",
-                  "fullPage", "gridExtra")) {
+                  "fullPage", "gridExtra", "shinycssloaders")) {
   if (!require(package, character.only=TRUE, quietly=TRUE)) {
     install.packages(package)
   }
@@ -33,6 +33,7 @@ library(wesanderson)
 library(mapview)
 library(fullPage)
 library(gridExtra)
+library(shinycssloaders)
 
 ##### Helper variables and functions #####
 
@@ -73,6 +74,8 @@ input_unit_list <- list("nitrogen" = "kg/ha",
 
 get(load("data/prod_change_bardata.RData"))
 get(load("data/prod_change_countries.RData"))
+World_sp$prod_change[World_sp$prod_change > 0] <- 0    
+
 get(load("data/NSE_data.RData"))
 
 prod_change_raster <- raster("data/prod_change_raster.tif")
@@ -338,7 +341,7 @@ ui <- pagePiling(center = FALSE,
                          br(),
                          h3(style = "text-align: center;", "Climate bins"),
                          br(),
-                         column(11, tmapOutput("climatebinmap")),
+                         column(11, leafletOutput("climatebinmap") %>% withSpinner(color = "#5B1A18")),
                          column(1))
                        
                         #tabpanel ends
@@ -376,11 +379,11 @@ ui <- pagePiling(center = FALSE,
                 ),
               fluidRow(
                 column(6, offset = 1,
-                       leafletOutput("inputmap")
+                       leafletOutput("inputmap") %>% shinycssloaders::withSpinner(color = "#5B1A18")
                        ),
                 column(5,
                   column(11,
-                       plotlyOutput("inputtile")),
+                       plotlyOutput("inputtile")%>% shinycssloaders::withSpinner(color = "#5B1A18")),
                   column(1))
                 
                 
@@ -461,7 +464,7 @@ ui <- pagePiling(center = FALSE,
                    column(9,
                         column(10,
                           h4(textOutput("maptitle")),
-                          leafletOutput("scenariomap"),
+                          leafletOutput("scenariomap")%>% shinycssloaders::withSpinner(color = "#5B1A18"),
                           helpText("Yield decrease in % from the original yield. 
                                    The map only shows yield decreases and omits increases.")),
                         column(2))
@@ -509,7 +512,7 @@ ui <- pagePiling(center = FALSE,
                       column(9,
                              column(11, 
                                     br(),
-                                    plotlyOutput("tileplot"),
+                                    plotlyOutput("tileplot") %>% shinycssloaders::withSpinner(color = "#5B1A18"),
                                     helpText(strong("share:"),"each tile represents
                                            the share of the respective climate bin’s
                                              cells where yield decline after the shock
@@ -575,7 +578,7 @@ ui <- pagePiling(center = FALSE,
                           column(11, 
                                  br(),
                                  br(),
-                                 plotOutput("agriplot")),
+                                 plotOutput("agriplot") %>% shinycssloaders::withSpinner(color = "#5B1A18")),
                           column(1)) #buffer
                     ) #column ends
         ), #page ends
@@ -606,15 +609,15 @@ ui <- pagePiling(center = FALSE,
                                           In the tab", tags$i("All countries"), "production decreases are summed for whole countries.")),
                             
                             column(9,
-                                  plotlyOutput("productionbars"))),    
+                                  plotlyOutput("productionbars")%>% shinycssloaders::withSpinner(color = "#5B1A18"))),    
                       
                         tabPanel("All crops",
                                  h5(style = "text-align: center;", "Change in production for all 12 crops after 50% shock in all inputs"),
-                                  tmapOutput("productionraster")),
+                                  tmapOutput("productionraster")%>% shinycssloaders::withSpinner(color = "#5B1A18")),
                       
                         tabPanel("All countries",
                                  h5(style = "text-align: center;", "Countrywise change in the total production of all 12 crops after 50% shock in all inputs"),
-                                  tmapOutput("productioncountries"))
+                                  tmapOutput("productioncountries")%>% shinycssloaders::withSpinner(color = "#5B1A18"))
                       
                    )),
                    column(1)
@@ -642,7 +645,7 @@ ui <- pagePiling(center = FALSE,
                        column(9,
                           column(11,
                                  br(),
-                            plotOutput("NSE")),
+                            plotOutput("NSE")%>% shinycssloaders::withSpinner(color = "#5B1A18")),
                           column(1)))),
                 
                 tabPanel("RMSE-scores",
@@ -663,7 +666,7 @@ ui <- pagePiling(center = FALSE,
                          )),
                       column(9,
                           column(11,
-                             plotOutput("RMSE")),
+                             plotOutput("RMSE")%>% shinycssloaders::withSpinner(color = "#5B1A18")),
                           column(1))
                          )),
                 tabPanel("ALE-plots",
@@ -694,7 +697,7 @@ ui <- pagePiling(center = FALSE,
                         column(11,
                                br(),
                                br(),
-                             plotOutput("aleplot")),
+                             plotOutput("aleplot")%>% shinycssloaders::withSpinner(color = "#5B1A18")),
                         column(1))))
               )
                  )))
@@ -709,24 +712,44 @@ server <- function(input, output) {
   
   bin_data <- reactive({
     raster_name <- paste0('data/', input$bincrop, "_binmatrix.tif")
-    climate_bins <- rast(raster_name)
+    climate_bins <- raster(raster_name)
+    names(bin_data) <- "climatebin"
   })
   
-  output$climatebinmap <- renderTmap({
-
-    tm_shape(bin_data()) +
-        tm_raster(style = "cont" , # draw gradient instead of classified
-                  palette = pal_bivariate,
-                  colorNA = "white",
-                  title = input$bincrop,
-                  legend.show = FALSE) +
-        tm_shape(World) +
-        tm_borders(col = "grey") +
-        tm_view(alpha = 1, set.view = c(30,50,2),
-                leaflet.options = ctrl_list,
-                view.legend.position = NA)
-
+  
+  output$climatebinmap <- renderLeaflet({
+    
+    map <- mapview(bin_data(),
+                   use.layer.names = TRUE,
+                   col.regions = pal_bivariate,
+                   na.color = NA,
+                   alpha.regions = 1,
+                   legend = FALSE,
+                   maxpixels =  9331200,
+                   map.types = "Esri.WorldGrayCanvas",
+                   query.digits = 0,
+                   query.prefix = "") 
+    
+    map@map %>%
+      setView(lng=30, lat=50, zoom =2)
+    
   })
+  
+  # output$climatebinmap <- renderTmap({
+  # 
+  #   tm_shape(bin_data()) +
+  #       tm_raster(style = "cont" , # draw gradient instead of classified
+  #                 palette = pal_bivariate,
+  #                 colorNA = "white",
+  #                 title = input$bincrop,
+  #                 legend.show = FALSE) +
+  #       tm_shape(World) +
+  #       tm_borders(col = "grey") +
+  #       tm_view(alpha = 1, set.view = c(30,50,2),
+  #               leaflet.options = ctrl_list,
+  #               view.legend.position = NA)
+  # 
+  # })
 
   ###### Input plots ######
   
@@ -747,7 +770,10 @@ server <- function(input, output) {
   #make raster
   input_raster <- reactive({
     
-    input_raster <- make_input_raster_shiny(input_map_data(), input$agriinput, 50)
+    raster_name <- paste0("data/input_rasters/", input$inputcrop, input$agriinput, ".tif")
+    input_raster <- raster(raster_name)
+
+    # input_raster <- make_input_raster_shiny(input_map_data(), input$agriinput, 50)
     names(input_raster) <- paste(input$agriinput, unlist(input_unit_list[input$agriinput]))
     input_raster
     
@@ -1034,24 +1060,27 @@ server <- function(input, output) {
   
 
   #load data
-  scenario_map_data <- reactive({
-    file_name <- paste0("data/", input$mapcrop, "_scenario_summary.RData")
-    get(load(file_name))
-    colnames(crop_scenarios) <- c("cell", "scenario_percent", "x", "y", "observed_normal_yield",
-                                  "nitrogen shock", "phosphorus shock",
-                                  "potassium shock", "machinery shock",
-                                  "pesticide shock", "fertilizer shock", 
-                                  "shock in all inputs", "bin", "nitrogen fertilizer", 
-                                  "phosphorus fertilizer",
-                                  "potassium fertilizer", 
-                                  "machinery", "pesticides", "irrigation")
-    as.data.frame(crop_scenarios)
-  })
+  # scenario_map_data <- reactive({
+  #   file_name <- paste0("data/", input$mapcrop, "_scenario_summary.RData")
+  #   get(load(file_name))
+  #   colnames(crop_scenarios) <- c("cell", "scenario_percent", "x", "y", "observed_normal_yield",
+  #                                 "nitrogen shock", "phosphorus shock",
+  #                                 "potassium shock", "machinery shock",
+  #                                 "pesticide shock", "fertilizer shock", 
+  #                                 "shock in all inputs", "bin", "nitrogen fertilizer", 
+  #                                 "phosphorus fertilizer",
+  #                                 "potassium fertilizer", 
+  #                                 "machinery", "pesticides", "irrigation")
+  #   as.data.frame(crop_scenarios)
+  # })
 
   #make raster
   map_raster <- reactive({
     
-    map_raster <- make_shock_raster_shiny(scenario_map_data(), input$mapshock, input$mapscenario)
+    map_name <- paste0("data/scenario_rasters/", input$mapcrop, input$mapshock, input$mapscenario, ".tif")
+    map_raster <- raster(map_name)
+    
+    #map_raster <- make_shock_raster_shiny(scenario_map_data(), input$mapshock, input$mapscenario)
     names(map_raster) <- "yield decrease"
     map_raster
 
@@ -1131,7 +1160,7 @@ server <- function(input, output) {
                     col.regions = viridis(n = 5, option = "magma", direction = 1),
                     na.color = NA,
                     alpha.regions = 1,
-                    maxpixels =  9331200,
+                    maxpixels =  21884576,
                     map.types = "Esri.WorldGrayCanvas",
                     query.digits = 1,
                     query.prefix = "%") 
@@ -1140,28 +1169,49 @@ server <- function(input, output) {
        setView(lng=30, lat=50, zoom =2)
   
    })
+   
+   output$productioncountries <- renderLeaflet({
+     
+     map <- mapview(World_sp,
+                    zcol = "prod_change",
+                    layer.name = "production change",
+                    col.regions = viridis(n = 5, option = "magma", direction = 1),
+                    #at = seq(-75, 0, 25),
+                    contour = FALSE,
+                    na.color = NA,
+                    alpha.regions = 1,
+                    popup = FALSE,
+                    maxpixels =  21884576,
+                    map.types = "Esri.WorldGrayCanvas",
+                    query.digits = 1,
+                    query.prefix = "%") 
+     
+     map@map %>%
+       setView(lng=30, lat=50, zoom =2)
+     
+   })
   
-  output$productioncountries <- renderTmap({
-
-    tm_shape(World_sp)+
-      tm_polygons("prod_change",
-                  style="cont",
-                  palette = viridis(n = 5, option = "magma", direction = -1),
-                  breaks = seq(-75, 0, 25),
-                  legend.reverse = FALSE,
-                  title = "decrease %")+
-      tm_view(set.view = c(30,50,2))
-      # tm_layout(main.title = "Change in production in all 12 crops after 50% shock in all inputs",
-      #           main.title.size = 1,
-      #           bg.color = "white",
-      #           legend.show = TRUE,
-      #           legend.outside = TRUE,
-      #           #legend.outside.position = c("left", "bottom"),
-      #           earth.boundary = c(-180, 180, -90, 90),
-      #           earth.boundary.color = "gray",
-      #           frame = FALSE)
-  })
-  
+  # output$productioncountries <- renderTmap({
+  # 
+  #   tm_shape(World_sp)+
+  #     tm_polygons("prod_change",
+  #                 style="cont",
+  #                 palette = viridis(n = 5, option = "magma", direction = -1),
+  #                 breaks = seq(-75, 0, 25),
+  #                 legend.reverse = FALSE,
+  #                 title = "decrease %")+
+  #     tm_view(set.view = c(30,50,2))
+  #     # tm_layout(main.title = "Change in production in all 12 crops after 50% shock in all inputs",
+  #     #           main.title.size = 1,
+  #     #           bg.color = "white",
+  #     #           legend.show = TRUE,
+  #     #           legend.outside = TRUE,
+  #     #           #legend.outside.position = c("left", "bottom"),
+  #     #           earth.boundary = c(-180, 180, -90, 90),
+  #     #           earth.boundary.color = "gray",
+  #     #           frame = FALSE)
+  # })
+  # 
 
   ###### Performance plots ######
   
