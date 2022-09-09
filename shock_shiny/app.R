@@ -1160,7 +1160,7 @@ server <- function(input, output) {
                     col.regions = viridis(n = 5, option = "magma", direction = 1),
                     na.color = NA,
                     alpha.regions = 1,
-                    maxpixels =  21884576,
+                    maxpixels =  9331200,
                     map.types = "Esri.WorldGrayCanvas",
                     query.digits = 1,
                     query.prefix = "%") 
